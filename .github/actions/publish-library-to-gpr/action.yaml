@@ -263,7 +263,7 @@ runs:
         if [ "${old_bare}" != "${new_bare}" ] && [ -d prebuilds ]; then
           old_exports="${old_bare%.bare}.bare.exports"
           new_exports="${new_bare%.bare}.bare.exports"
-          echo "Linking fabric prebuild aliases: ${old_bare} -> ${new_bare}"
+          echo "Linking prebuild aliases: ${old_bare} -> ${new_bare}"
           shopt -s nullglob
           for platform_dir in prebuilds/*/; do
             [ -f "${platform_dir}${old_bare}" ] || continue

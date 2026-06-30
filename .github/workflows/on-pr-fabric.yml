@@ -70,6 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pkg: ${{ steps.filter.outputs.pkg }}
+      native: ${{ steps.filter.outputs.native }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -80,10 +81,23 @@ jobs:
         id: filter
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # `native` is a C++/CMake-scoped subset of `pkg`. The multi-platform
+          # prebuild (llama.cpp/ggml across Linux/macOS/Windows/Android/iOS) is
+          # expensive, so it only runs when a file that actually affects the
+          # compiled addon changes. Doc/JS-only edits match `pkg` (so the PR
+          # workflow still runs) but not `native` (so the prebuild is skipped).
           filters: |
             pkg:
               - "packages/fabric/**"
               - ".github/workflows/*fabric*.yml"
+            native:
+              - "packages/fabric/addon/**"
+              - "packages/fabric/CMakeLists.txt"
+              - "packages/fabric/cmake/**"
+              - "packages/fabric/symbols.map"
+              - "packages/fabric/exports.txt"
+              - "packages/fabric/vcpkg*.json"
+              - ".github/workflows/prebuilds-fabric.yml"
 
   sanity-checks:
     needs:
@@ -110,17 +124,21 @@ jobs:
         id: fetch_pr
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
         continue-on-error: true
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git fetch origin "$HEAD_SHA:refs/pr/head"
 
       - name: Check PR Status with Target Branch
         continue-on-error: true
         id: target_branch_checks
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          TARGET_SHA=${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
           if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
             echo "::error title=PR is not up to date::This PR is not up to date with target branch"
           fi
@@ -202,7 +220,7 @@ jobs:
       - changes
       - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
+      needs.label-gate.outputs.authorised == 'true' && (needs.changes.outputs.pkg == 'true') && ( github.event_name == 'workflow_dispatch' || (needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.native == 'true') )
     uses: ./.github/workflows/prebuilds-fabric.yml
     secrets: inherit
     with:
@@ -215,4 +233,6 @@ jobs:
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
+      # A skipped prebuild is a pass: doc/JS-only PRs don't touch native sources
+      # (see the `native` filter above), so there is no compiled artifact to gate on.
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}

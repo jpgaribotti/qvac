@@ -149,7 +149,6 @@ jobs:
     needs: [build, publish-logic]
     if: >-
       needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
-    continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.gpr_published_version }}
     runs-on: ubuntu-latest
@@ -201,10 +200,11 @@ jobs:
       - name: Validate npm_tag input
         if: inputs.npm_tag != ''
         shell: bash
+        env:
+          NPM_TAG: ${{ inputs.npm_tag }}
         run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+          if ! printf '%s' "$NPM_TAG" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
             exit 1
           fi
 
