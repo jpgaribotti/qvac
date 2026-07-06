@@ -11,8 +11,7 @@
   `common_*` and `json_schema_to_grammar` C++ symbols (Linux version script
   `symbols.map`, macOS `exports.txt`).
 - Ships llama/ggml/common/mtmd headers under `prebuilds/include/` and a
-  `find_package(qvac-fabric)` CMake config exposing `qvac-fabric::headers` and
-  (for mobile static builds) `qvac-fabric::qvac-fabric-static`.
+  `find_package(qvac-fabric)` CMake config exposing `qvac-fabric::headers`.
 - On **Linux and Android**, stages ggml compute backends as shared libraries under
   `prebuilds/<platform>/qvac__fabric/` for runtime loading via
   `ggml_backend_load_all_from_path()`; on **macOS, Windows, and iOS** the backends

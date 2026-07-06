@@ -20,10 +20,7 @@ pattern. See [INTEGRATION.md](./INTEGRATION.md) for the consumer guide.
 - **C++ headers** (`prebuilds/include/`) — `ggml*.h`, `gguf.h` at the root and
   `llama.h`, `llama-cpp.h`, `common/*.h`, `mtmd/*.h` under `include/llama/`.
 - **CMake config** (`prebuilds/share/qvac-fabric/`) — `find_package(qvac-fabric)`
-  exposes:
-  - `qvac-fabric::headers` — compile-time headers (always available)
-  - `qvac-fabric::qvac-fabric-static` — static llama/ggml linking (mobile builds
-    only, when `prebuilds/share/llama/` exists)
+  exposes `qvac-fabric::headers` for compile-time includes
 - **ggml compute backends** — on **Linux and Android**, separate shared libraries
   ship under `prebuilds/<platform>/qvac__fabric/` and are loaded at runtime via
   `ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
