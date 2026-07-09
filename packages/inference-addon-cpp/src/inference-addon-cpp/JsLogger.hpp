@@ -62,17 +62,19 @@ namespace qvac_lib_inference_addon_cpp::logger {
       JS(js_create_reference(env, fn, 1, &newCb));
       auto onErrorDeleteRef = utils::onError([&](){ js_delete_reference(env, newCb); });
 
-      bool expected = false;
-      if (async_initiated_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+      // async_initiated_ / logger_async_ are only ever read or written under
+      // admin_mutex_ (held above), so a plain bool is sufficient here.
+      if (!async_initiated_) {
         // First install (or a clean reinstall after teardown/release): create
         // the async handle on THIS env's loop.
+        async_initiated_ = true;
         uv_loop_t* jsLoop = nullptr;
         JS(js_get_env_loop(env, &jsLoop));
         logger_async_ = new uv_async_t{};
         if (uv_async_init(jsLoop, logger_async_, &JsLogger::asyncCallback) != 0) {
           delete logger_async_;
           logger_async_ = nullptr;
-          async_initiated_.store(false, std::memory_order_release);
+          async_initiated_ = false;
           throw qvac_errors::StatusError(qvac_errors::general_error::InternalError, "Could not initialize uv async handle.");
         }
         // Handle initialized; if the steps below throw it must be closed again.
@@ -211,9 +213,9 @@ namespace qvac_lib_inference_addon_cpp::logger {
       }
       // Serialize the send against install/release/teardown so a producer
       // thread cannot uv_async_send a handle that closeAsyncHandleLocked() is
-      // closing.
+      // closing. Holding admin_mutex_ also guards the plain-bool async_initiated_.
       const std::lock_guard<std::mutex> admin(admin_mutex_);
-      if (async_initiated_.load(std::memory_order_acquire)) {
+      if (async_initiated_) {
         uv_async_send(logger_async_);
       } else {
         auto state = loadState();
@@ -224,14 +226,13 @@ namespace qvac_lib_inference_addon_cpp::logger {
 
     static void releaseJsRefs(js_env_t *env, js_ref_t *cb) {
       JS(js_delete_reference(env, cb));
-      env = nullptr;
-      cb = nullptr;
     }
 
     // Requires admin_mutex_ held. Closes and frees the uv_async handle if
     // armed.
     static void closeAsyncHandleLocked() {
-      if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
+      if (async_initiated_) {
+        async_initiated_ = false;
         uv_close(
             reinterpret_cast<uv_handle_t*>(logger_async_),
             [](uv_handle_t* handle) { delete handle; });
@@ -274,17 +275,13 @@ namespace qvac_lib_inference_addon_cpp::logger {
       );
     }
 
-    static bool compareExchangeState(std::shared_ptr<State>& expected,
-                              std::shared_ptr<State> desired) {
-      return std::atomic_compare_exchange_strong(&state_, &expected, std::move(desired));
-    }
-
-    inline static std::atomic<bool> async_initiated_{false};
+    // Guarded by admin_mutex_ (all reads/writes happen inside a critical section).
+    inline static bool async_initiated_{false};
     inline static uv_async_t* logger_async_{nullptr};
     inline static std::deque<LogEntry> log_queue_{};
     inline static std::mutex queue_mutex_{};
     // Serializes setLogger / releaseLogger / onEnvTeardown critical sections.
     inline static std::mutex admin_mutex_{};
-    inline static std::shared_ptr<struct State> state_{nullptr}; //Use only safe methods loadState/storeState/compareExchangeState (it's atomic) !
+    inline static std::shared_ptr<struct State> state_{nullptr}; //Use only safe methods loadState/storeState (it's atomic) !
   };
 } //namespace qvac_lib_inference_addon_cpp::logger
