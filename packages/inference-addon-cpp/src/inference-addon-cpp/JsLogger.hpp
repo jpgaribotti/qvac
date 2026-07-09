@@ -206,6 +206,9 @@ namespace qvac_lib_inference_addon_cpp::logger {
         std::lock_guard<std::mutex> guard(queue_mutex_);
         log_queue_.emplace_back(LogEntry{priority, message});
       }
+      // Serialize the send against install/release/teardown so a producer thread
+      // cannot uv_async_send a handle that closeAsyncHandleLocked() is closing.
+      const std::lock_guard<std::mutex> admin(admin_mutex_);
       if (async_initiated_.load(std::memory_order_acquire)) {
         uv_async_send(logger_async_);
       } else {
