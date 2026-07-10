@@ -89,3 +89,29 @@ test('releaseLogger allows logger to be set again', async (t) => {
   }
   addon.releaseLogger()
 })
+
+test('setLogger replaces the callback on the same env without releaseLogger', async (t) => {
+  t.timeout(1000)
+
+  // Install an initial callback, then re-install on the SAME env WITHOUT
+  // releaseLogger in between. This exercises setLogger's same-env branch
+  // (oldState->env == env): it frees the previous callback ref and swaps in the
+  // new one while reusing the already-armed async handle.
+  const firstMessages = []
+  t.is(addon.setLogger((prio, msg) => {
+    firstMessages.push({ prio, msg })
+  }), undefined, 'first setLogger returns undefined')
+
+  const secondMessages = []
+  t.is(addon.setLogger((prio, msg) => {
+    secondMessages.push({ prio, msg })
+  }), undefined, 'in-place setLogger returns undefined')
+
+  addon.dummyCppLogWork()
+  await waitForMessages(secondMessages, 1)
+
+  assertMessage(t, secondMessages[0], { prio: 3, msg: 'hello from C++' }, 0)
+  t.is(firstMessages.length, 0, 'replaced callback no longer receives logs')
+
+  addon.releaseLogger()
+})
