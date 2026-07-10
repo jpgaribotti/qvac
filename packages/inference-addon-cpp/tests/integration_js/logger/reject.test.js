@@ -2,7 +2,7 @@ const test = require('brittle')
 const Thread = require('bare-thread')
 const addon = require('.')
 
-// Option D (see arch/qips/logger-multi-env-singleton.md): the JsLogger singleton
+// The JsLogger singleton
 // supports a single live owning env at a time. These tests exercise that
 // contract using real concurrent envs spawned via bare-thread (each Thread is a
 // separate js_env_t with its own uv_loop).

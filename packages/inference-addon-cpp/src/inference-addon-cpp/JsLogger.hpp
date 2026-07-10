@@ -45,7 +45,7 @@ namespace qvac_lib_inference_addon_cpp::logger {
 
       auto cur = loadState();
       if (cur && cur->env != env) {
-        // Option D: this singleton supports a single live owning env at a time.
+        // This singleton supports a single live owning env at a time.
         // A different env still owns the logger. In the supported model the
         // previous owner clears state_ (via releaseLogger or onEnvTeardown)
         // before the next env installs, so a populated different-env slot means
@@ -213,7 +213,8 @@ namespace qvac_lib_inference_addon_cpp::logger {
       }
       // Serialize the send against install/release/teardown so a producer
       // thread cannot uv_async_send a handle that closeAsyncHandleLocked() is
-      // closing. Holding admin_mutex_ also guards the plain-bool async_initiated_.
+      // closing. Holding admin_mutex_ also guards the plain-bool
+      // async_initiated_.
       const std::lock_guard<std::mutex> admin(admin_mutex_);
       if (async_initiated_) {
         uv_async_send(logger_async_);
@@ -275,13 +276,15 @@ namespace qvac_lib_inference_addon_cpp::logger {
       );
     }
 
-    // Guarded by admin_mutex_ (all reads/writes happen inside a critical section).
+    // Guarded by admin_mutex_ (all reads/writes happen inside a critical
+    // section).
     inline static bool async_initiated_{false};
     inline static uv_async_t* logger_async_{nullptr};
     inline static std::deque<LogEntry> log_queue_{};
     inline static std::mutex queue_mutex_{};
     // Serializes setLogger / releaseLogger / onEnvTeardown critical sections.
     inline static std::mutex admin_mutex_{};
-    inline static std::shared_ptr<struct State> state_{nullptr}; //Use only safe methods loadState/storeState (it's atomic) !
+    inline static std::shared_ptr<struct State> state_{
+        nullptr}; // Use only safe methods loadState/storeState (it's atomic) !
   };
 } //namespace qvac_lib_inference_addon_cpp::logger
