@@ -207,22 +207,35 @@ namespace qvac_lib_inference_addon_cpp::logger {
     }
 
     static void log(int priority, const std::string &message) {
+      // Gate the enqueue on liveness under admin_mutex_ so an entry can only
+      // ever land in the queue while a live owner exists. release/teardown
+      // clear the queue under the same lock, so any enqueue is strictly either
+      // before a release (then cleared/dropped) or after the next setLogger
+      // (then it belongs to the new owner) - a producer can never leave an
+      // orphaned entry in the gap that bleeds into the next owner's callback.
+      // This also serializes the uv_async_send against install/release/teardown
+      // so a producer cannot send a handle that closeAsyncHandleLocked() is
+      // closing, and guards the plain-bool async_initiated_.
+      const std::lock_guard<std::mutex> admin(admin_mutex_);
+
+      auto state = loadState();
+      if (!state) {
+        // No live owner (e.g. between releaseLogger/teardown and the next
+        // setLogger): drop the message instead of enqueuing an orphan.
+        return;
+      }
+
+      if (!async_initiated_) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "The logger should be initialized (async)");
+      }
+
       {
         std::lock_guard<std::mutex> guard(queue_mutex_);
         log_queue_.emplace_back(LogEntry{priority, message});
       }
-      // Serialize the send against install/release/teardown so a producer
-      // thread cannot uv_async_send a handle that closeAsyncHandleLocked() is
-      // closing. Holding admin_mutex_ also guards the plain-bool
-      // async_initiated_.
-      const std::lock_guard<std::mutex> admin(admin_mutex_);
-      if (async_initiated_) {
-        uv_async_send(logger_async_);
-      } else {
-        auto state = loadState();
-        if (!state) return;
-        throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument, "The logger should be initialized (async)");
-      }
+      uv_async_send(logger_async_);
     }
 
     static void releaseJsRefs(js_env_t *env, js_ref_t *cb) {
