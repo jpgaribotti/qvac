@@ -7,11 +7,11 @@ const addon = require('.')
 // contract using real concurrent envs spawned via bare-thread (each Thread is a
 // separate js_env_t with its own uv_loop).
 
-function delay (ms) {
+function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function waitForFlag (flags, index, timeout = 5000) {
+async function waitForFlag(flags, index, timeout = 5000) {
   const start = Date.now()
   while (Atomics.load(flags, index) === 0) {
     if (Date.now() - start >= timeout) {
@@ -68,7 +68,7 @@ test('sequential handoff across envs keeps working', async (t) => {
   const SET_OK = 0
   const RECV = 1
 
-  async function runOwner () {
+  async function runOwner() {
     const flags = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT))
     const worker = new Thread('./worker-set-release.js', { data: flags.buffer })
     worker.join()
@@ -113,7 +113,10 @@ test('releaseLogger from a non-owner env is a no-op', async (t) => {
   Atomics.notify(flags, RELEASED)
   worker.join()
 
-  t.ok(Atomics.load(flags, RECV) >= 1, 'owner still received its log after a non-owner releaseLogger')
+  t.ok(
+    Atomics.load(flags, RECV) >= 1,
+    'owner still received its log after a non-owner releaseLogger'
+  )
 })
 
 // The supported reload path: an owning env is torn down WITHOUT calling
