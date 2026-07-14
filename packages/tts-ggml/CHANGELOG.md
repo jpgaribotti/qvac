@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so hosts can confirm where the enhancer actually ran.
 - Opt-in `vulkanCacheDir` (Supertonic + `useGPU: true`): persists the Vulkan pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`) and pre-warms it at `load()` so the first-dispatch shader-compile cost is paid once per install, not on the first `run()`. Fully opt-in/non-breaking; Vulkan analogue of `openclCacheDir` (QVAC-21910, tetherto/qvac#3120).
 
-## [0.4.3] - 2026-07-14
+## [0.5.0] - 2026-07-14
 
 ### Fixed
 

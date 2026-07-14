@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Faster desktop neural-signal preprocessing on the GPU (Vulkan) and CPU paths. Public API and transcription output are unchanged.
 
-## [0.4.2] - 2026-07-14
+## [0.5.0] - 2026-07-14
 
 ### Fixed
 
