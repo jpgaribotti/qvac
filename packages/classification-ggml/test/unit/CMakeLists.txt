@@ -84,6 +84,29 @@ if(ENABLE_COVERAGE)
   endif()
 endif()
 
+# AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
+# addon-test dynamically links the shared @qvac/fabric runtime
+# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# -static-libstdc++ (see packages/fabric/CMakeLists.txt). Its module-local
+# static libc++ provides fabric's OWN operator new/delete, bound internally by
+# the symbols.map `local: *` rule, so allocations made inside fabric bottom out
+# at plain malloc while addon-test's operator new/delete resolve to the ASan
+# runtime. Any object that crosses the module boundary (new'd on one side,
+# delete'd on the other) trips ASan's alloc-dealloc / new-delete mismatch check
+# and aborts the run, and fabric's long-lived runtime globals + dlopen'd ggml
+# backends look like leaks at exit. A fully ASan-clean link would need an
+# ASan-instrumented fabric (QVAC_FABRIC_ASAN=1 -> shared libc++), which the npm
+# prebuild does not ship. So we keep ASan for its heap-overflow / use-after-free
+# value on the addon's own code and require the CI runner to relax the checks
+# the static-libstdc++ boundary provokes:
+#   ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0
+# (see .github/workflows/cpp-tests-classification.yml). No LD_PRELOAD is needed
+# because the ASan runtime is linked directly into this executable and
+# initializes before the fabric module loads.
+if(NOT WIN32)
+  target_link_libraries(addon-test PRIVATE -fsanitize=address)
+endif()
+
 # Copy the shared @qvac/fabric runtime next to the test executable so it
 # resolves at runtime via the $ORIGIN/@loader_path rpath set below.
 add_custom_command(TARGET addon-test POST_BUILD
