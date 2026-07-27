@@ -7,9 +7,10 @@ boilerplate is extracted.
 Use it when refactoring an addon's build, migrating an addon to the shared
 `@qvac/fabric` runtime, or adding a new addon.
 
-> Status: **proposal / design**. Nothing here is implemented yet. The shared
-> module and CI guard described in "Proposed shared module" and "Keeping addons
-> in sync" do not exist at the time of writing.
+> Status: **partially implemented**. The shared module
+> (`cmake/qvac-addon/qvac-addon.cmake`) exists and `classification-ggml` is
+> migrated to it. The CI drift guard described in "Keeping addons in sync" is
+> not built yet, and no other addon is migrated.
 
 ## Background
 
@@ -89,7 +90,16 @@ New shared blocks introduced by the fabric form (also extract):
 - **Fixed `BACKENDS_SUBDIR = <host>/qvac__fabric`**.
 - **Platform-derived `GGML_BACKEND_DL`**.
 - **Test-harness staging**: copy `.bare` + glob fabric backends next to the test
-  exe, set rpath, win32 delay-load helper, limited-ASan + `ASAN_OPTIONS`.
+  exe, set rpath, win32 delay-load helper. This is **test-only** — the
+  production addon build stages no backends (see note below).
+
+> **The addon never packages ggml backends.** `add_bare_module(… EXPORTS)`
+> exports nothing. On desktop the runtime resolves backends from `@qvac/fabric`'s
+> own `node_modules` prebuilds (`resolveBackendsDir()` in `src/index.ts`); on
+> mobile the app/link bundling co-locates the `.bare` modules and their backends
+> (the addon's `__dirname/prebuilds` fallback just points at wherever that
+> bundling landed them). The only backend copying in the package is the
+> **test** harness staging backends next to the test binary.
 
 ### Addon-specific (keep as explicit customization points)
 
@@ -110,9 +120,22 @@ New shared blocks introduced by the fabric form (also extract):
 | Concern | Consequence if missing | Fix |
 |---|---|---|
 | `if(TARGET ggml::…)` backend guard | `add_bare_module` `get_target_property()` errors on some feature sets | Removed entirely by fabric form (no backend loop) |
-| Android 16 KB page-size link flags | addon fails to load on Pixel 9-class devices | Applied uniformly in `qvac_addon_finalize` |
-| Apple `compiler-rt` `force_load` (Xcode 16 `__isPlatformVersionAtLeast`) | module aborts at first `@available` call | Applied uniformly in `qvac_addon_finalize` |
-| lint-cpp `.valgrind.supp` / pre-commit hook | inconsistent local dev hooks | Applied uniformly in `qvac_addon_project_setup` |
+| Android 16 KB page-size link flags | addon fails to load on Pixel 9-class devices | Applied unconditionally in `qvac_addon_finalize` |
+| Apple `compiler-rt` `force_load` (Xcode 16 `__isPlatformVersionAtLeast`) | module aborts at first `@available` call | Applied unconditionally in `qvac_addon_finalize` |
+| lint-cpp `.valgrind.supp` / pre-commit hook | inconsistent local dev hooks | Opt-in flags on `qvac_addon_project_setup` |
+
+> **The Android page-size and Apple `compiler-rt` fixes are folded into
+> `qvac_addon_finalize` unconditionally** to normalize the drift: every migrated
+> addon gets them, so none can silently regress. They are platform-guarded
+> (`if(ANDROID)` / `if(APPLE)`), so they are no-ops where they don't apply. This
+> is a deliberate **behavior change** for addons (like `classification-ggml`)
+> that previously lacked them — that's the point. The Apple block resolves the
+> exact `libclang_rt.<variant>.a` via `xcrun` and `FATAL_ERROR`s with an
+> actionable message if Xcode's SDK is missing, matching the proven
+> parakeet/tts implementation. They live in dedicated helpers
+> (`qvac_addon_android_page_size` / `qvac_addon_apple_force_load_compiler_rt`)
+> that `finalize` calls, so a rare addon that must opt out can call the pieces
+> directly instead.
 
 ## Proposed shared module
 
@@ -130,26 +153,35 @@ cmake/qvac-addon/qvac-addon.cmake
 Included from an addon via `../../cmake/qvac-addon/qvac-addon.cmake` (consistent
 with the existing `../../vcpkg-overlays` relative path assumption).
 
-Function surface (plain functions/macros, so nothing is locked away):
+Function surface (plain functions/macros, so nothing is locked away). The
+pre-/post-`project()` helpers are **macros** because they must set directory-scope
+state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
+`CMAKE_CXX_STANDARD`, the fabric target var) in the addon's own scope:
 
-- `qvac_addon_preproject([FEATURES <opt>…])` — pre-`project()` setup: options,
-  vcpkg feature mapping, `cmake-bare`/`cmake-vcpkg`, overlay triplets, Android
-  STL. Must run before `project()`.
-- `qvac_addon_project_setup()` — libc++ on Linux, lint-cpp sync, C++20 block,
-  WIN32 defs. Runs after `project()`.
-- `qvac_addon_use_fabric(OUT_TARGET <var> OUT_SUBDIR <var>)` — fabric discovery
-  (`set(qvac-fabric_DIR …)` + `find_package` + `include_bare_module`) and the
-  fixed `<host>/qvac__fabric` `BACKENDS_SUBDIR` value.
+- `qvac_addon_preproject()` (macro) — pre-`project()` setup: `BUILD_TESTING` /
+  `ENABLE_COVERAGE` options, `tests` vcpkg feature, `cmake-bare`/`cmake-vcpkg`,
+  overlay triplets, Android STL, version stamp. Addon-specific options / vcpkg
+  features are declared by the addon around this call (still before `project()`).
+- `qvac_addon_project_setup([VALGRIND_SUPP] [PRE_COMMIT_HOOK])` (macro) — libc++
+  on Linux, lint-cpp `.clang-format`/`.clang-tidy` sync (the `.valgrind.supp`
+  file and pre-commit hook are opt-in), C++20 block, WIN32 defs.
+- `qvac_addon_use_fabric()` (macro) — fabric discovery (`set(qvac-fabric_DIR …)`
+  + `find_package` + `include_bare_module`). Sets `qvac_fabric_target` and
+  `BACKENDS_SUBDIR_VALUE` (`<host>/qvac__fabric`) in the caller's scope.
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
   module).
-- `qvac_addon_finalize(<addon_target> SUBDIR <value>)` — everything applied to
-  every module: `--exclude-libs,ALL`, `JS_LOGGER`, `BACKENDS_SUBDIR` define,
-  platform-derived `GGML_BACKEND_DL`, Android page-size flags, Apple
-  `compiler-rt` `force_load`.
-- `qvac_addon_stage_fabric_for_test(<test_target>)` — copy `qvac__fabric@0.bare`
-  + glob fabric backends next to the test binary, set `$ORIGIN`/`@loader_path`
-  rpath, link `bare_delay_load` on win32, apply limited-ASan.
+- `qvac_addon_finalize(<addon_target> [SUBDIR <value>])` — everything applied to
+  every module: Linux `--exclude-libs,ALL`, `JS_LOGGER`, `BACKENDS_SUBDIR`
+  define, platform-derived `GGML_BACKEND_DL`, and (via dedicated helpers it
+  calls) the Android 16 KB page-size flags and Apple `compiler-rt` `force_load`.
+  The two platform fixes are also exposed as standalone helpers
+  (`qvac_addon_android_page_size` / `qvac_addon_apple_force_load_compiler_rt`)
+  for the rare addon that needs to opt out of `finalize` and wire them by hand.
+- `qvac_addon_stage_fabric_for_test(<test_target> <fabric_target>)` — test-only:
+  `GGML_BACKEND_DL`/`GGML_BACKEND_DIR`, copy `qvac__fabric@0.bare` + glob fabric
+  backends next to the test binary, set `$ORIGIN`/`@loader_path` rpath, link
+  `bare_delay_load` on win32. (ASan and coverage stay in the addon's test file.)
 
 ### Target template skeleton
 
@@ -166,8 +198,7 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
   "inference-addon-cpp/JsInterface.hpp" REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)          # addon-specific
 
-qvac_addon_use_fabric(OUT_TARGET qvac_fabric_target
-                      OUT_SUBDIR BACKENDS_SUBDIR_VALUE)
+qvac_addon_use_fabric()   # sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE
 
 add_bare_module(classification-ggml EXPORTS)
 
@@ -186,7 +217,7 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-  add_subdirectory(test/unit)   # calls qvac_addon_stage_fabric_for_test(addon-test)
+  add_subdirectory(test/unit)   # calls qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 endif()
 ```
 
@@ -239,17 +270,22 @@ migration PR also be its template-adoption PR.
 
 1. Land `classification-ggml` fabric migration ([PR #3301][pr3301]) as the
    reference shape.
-2. Add `cmake/qvac-addon/qvac-addon.cmake` + the CI drift guard with no behavior
-   change, extracting only the blocks the reference already proves.
+2. Add `cmake/qvac-addon/qvac-addon.cmake` and migrate `classification-ggml`.
+   `finalize` folds in the Android page-size + Apple `compiler-rt` fixes
+   unconditionally — a deliberate behavior change that normalizes the drift, so
+   addons that lacked them now get them.
 3. Migrate + adopt per addon, starting with the direct-ggml consumers
    (`vla-ggml`, `ocr-ggml`, `translation-nmtcpp`), then the llama addons once
    fabric's llama packaging is ready.
 
 ## Open questions
 
-- Where the module lives long-term: repo-root `cmake/qvac-addon/` (recommended,
-  consistent with `vcpkg-overlays/`) vs. shipping it inside the `cmake-bare` /
-  `cmake-vcpkg` npm packages for consumption outside the monorepo.
-- Whether the mobile packaging path (which stages fabric backends into the
-  addon's own prebuilds as a fallback for `resolveBackendsDir()`) needs its own
-  helper or folds into `qvac_addon_finalize`.
+- Whether to ship the module inside the `cmake-bare` / `cmake-vcpkg` npm
+  packages later, for consumption outside the monorepo. (Location is decided:
+  repo-root `cmake/qvac-addon/`, consistent with `vcpkg-overlays/`.)
+- When parakeet / tts migrate, they must **drop their inline** Android
+  page-size + Apple `compiler-rt` blocks and rely on `finalize` (avoid
+  double-application). Their extra Apple `-Wl,-exported_symbol` flags and
+  `symbols.map` version-script stay addon-specific for now.
+- Building the CI drift guard (`scripts/check-addon-cmake.mjs`) before the second
+  addon migrates, so re-inlined boilerplate can't creep back.
