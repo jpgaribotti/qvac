@@ -42,6 +42,9 @@ jobs:
 
   run-cpp-tests:
     needs: runner_names
+    # GR00T GGUFs from S3 plus the full addon-test suite (including the
+    # embodiment sweep) exceed the 30-minute default on a cold cache.
+    timeout-minutes: 60
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
@@ -152,7 +155,7 @@ jobs:
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
-          platform: ${{ matrix.platform }}
+          platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
@@ -162,6 +165,16 @@ jobs:
         name: Set Vulkan SDK Path on Linux
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
+
+      # vla requests qvac-fabric[hip-backend] (linux-x64), which requires ROCm at
+      # build time — install it so the addon's C++ tests build with HIP.
+      # Omit `with:` so version/gfx/sha256 all come from the action defaults
+      # and match /opt/rocm/.qvac-rocm when this job runs on a stamped image.
+      # Harmless after #3998 drops hip-backend (setup-rocm is a no-op for
+      # configure when the feature is absent); #3998 can delete this step.
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Setup ROCm SDK for HIP cross-compile
+        uses: ./.github/actions/setup-rocm
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
@@ -308,6 +321,12 @@ jobs:
           # GrootEmbodimentSweep skips cleanly when unset.
           GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
+          # addon-test links AddressSanitizer but dynamically loads the
+          # non-ASan, -static-libstdc++ @qvac/fabric prebuild. Relax exactly
+          # those two checks. Harmless on current main (static fabric, no
+          # dlopen boundary) and on win32 (nothing is ASan-linked). #3998's
+          # run-cpp-tests.js wrapper reads this env as-is when present.
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: |
           set -euo pipefail
 
@@ -316,7 +335,6 @@ jobs:
             exit 1
           fi
 
-          # test:cpp:run applies fabric-boundary ASAN_OPTIONS via scripts/run-cpp-tests.js.
           # pipefail: a failing addon-test exit code propagates through tee.
           npm run test:cpp:run 2>&1 | tee build/test/unit/test-output.log
 
