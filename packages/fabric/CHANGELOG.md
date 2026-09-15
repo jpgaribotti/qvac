@@ -28,6 +28,10 @@
   `INTERNAL_ERROR` / `"Unknown error"` instead of llama's message — on Linux
   only, since macOS and Windows already share one runtime with their consumers.
 
+  Only the Linux module is affected. Android keeps `ANDROID_STL=c++_shared`, so
+  it already shares one runtime with its consumers through `libc++_shared.so`
+  and exports exactly what it did before; Darwin, iOS and Windows are untouched.
+
   This is a **minor** for the same reason 0.9.0 and 0.12.0 were: it widens the
   exported surface. It also makes the Linux runtime and its consumers a
   lockstep pair — an addon linked with `-nostdlib++`

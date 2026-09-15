@@ -210,9 +210,42 @@ endif()
 
 # Symbol visibility: export the llama / ggml / common runtime surface plus the
 # bare/napi entry points; hide everything else.
+#
+# The C++ ABI from symbols-linux-cxx-runtime.map is spliced in exactly when this
+# module embeds libc++ and is therefore the process' one C++ runtime, i.e. the
+# Linux release link above. Every other ELF configuration shares a runtime
+# through a libc++ shared library and defines none of those symbols itself:
+# Android links libc++_shared.so, and the Linux ASan build links libc++.so.1.
+# Applying the block there is a hard error rather than a no-op, because lld
+# defaults to --no-undefined-version and rejects a version script that assigns a
+# version to a symbol the output does not define.
 if(UNIX AND NOT APPLE)
+  set(_fabric_version_script "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
+  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+    set(_fabric_cxx_runtime_map
+      "${CMAKE_CURRENT_SOURCE_DIR}/symbols-linux-cxx-runtime.map")
+    file(READ "${_fabric_version_script}" _fabric_symbols)
+    file(READ "${_fabric_cxx_runtime_map}" _fabric_cxx_runtime_symbols)
+    # Splice at an explicit marker rather than a syntactic anchor, and fail on a
+    # miss: dropping the block silently would leave a module that links and runs
+    # but has no exported C++ ABI, reintroducing the cross-module `catch`
+    # failures the block exists to fix.
+    if(NOT _fabric_symbols MATCHES "# QVAC_FABRIC_LINUX_CXX_RUNTIME")
+      message(FATAL_ERROR
+        "qvac-fabric: symbols.map has no '# QVAC_FABRIC_LINUX_CXX_RUNTIME' "
+        "marker to splice symbols-linux-cxx-runtime.map into. The Linux "
+        "runtime must export the C++ ABI; restore the marker.")
+    endif()
+    string(REPLACE
+      "# QVAC_FABRIC_LINUX_CXX_RUNTIME" "${_fabric_cxx_runtime_symbols}"
+      _fabric_symbols "${_fabric_symbols}")
+    set(_fabric_version_script "${CMAKE_CURRENT_BINARY_DIR}/symbols-linux.map")
+    file(WRITE "${_fabric_version_script}" "${_fabric_symbols}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map" "${_fabric_cxx_runtime_map}")
+  endif()
   target_link_options(${qvac-fabric}_module PRIVATE
-    -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
+    -Wl,--version-script=${_fabric_version_script})
 elseif(APPLE)
   target_link_options(${qvac-fabric}_module PRIVATE
     -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exports.txt)

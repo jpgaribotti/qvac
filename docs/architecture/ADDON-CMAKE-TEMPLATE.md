@@ -177,7 +177,9 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   with `-nostdlib++` so libc++ / libc++abi come from fabric rather than a second
   static copy. Two copies means two `std::exception` typeinfos, and RTTI matches
   by address, so an addon could not `catch` what fabric threw. Fabric exports the
-  ABI in `packages/fabric/symbols.map`; only a target that links fabric may use
+  ABI from `packages/fabric/symbols-linux-cxx-runtime.map`, spliced into its
+  version script for Linux targets only; Android keeps the NDK's shared libc++ on
+  both sides and needs none of this. Only a target that links fabric may use
   this. Applied for you by `qvac_addon_link_fabric` and
   `qvac_addon_stage_fabric_for_test`. Rationale:
   `arch/qips/linux-fabric-libcxx-ownership.md`.
