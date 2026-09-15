@@ -22,7 +22,7 @@
 
 include_guard(GLOBAL)
 
-set(QVAC_ADDON_CMAKE_VERSION "0.1.0")
+set(QVAC_ADDON_CMAKE_VERSION "0.2.0")
 
 # ---------------------------------------------------------------------------
 # qvac_addon_preproject()
@@ -125,14 +125,55 @@ macro(qvac_addon_use_fabric)
 endmacro()
 
 # ---------------------------------------------------------------------------
+# qvac_addon_import_fabric_cxx_runtime(<target>)
+#
+# Linux only: link <target> without a C++ standard library of its own, so it
+# imports libc++ / libc++abi from @qvac/fabric instead.
+#
+# qvac_addon_project_setup() puts -static-libstdc++ on every link in the addon's
+# directory, which gave each module its own copy of libc++ — and with it its own
+# copy of every std:: typeinfo. RTTI compares typeinfo by address, so an
+# exception thrown by libcommon inside fabric matched no
+# `catch (const std::exception&)` in the addon: llama's argument-validation
+# errors fell through to JSCATCH's catch-all and reached JS as "Unknown error"
+# instead of the message. Fabric exports the Itanium C++ ABI (see
+# packages/fabric/symbols.map) and is the process' one C++ runtime; these
+# symbols resolve from the fabric module already on the target's link line.
+#
+# -nostdlib++ suppresses the driver's C++ stdlib link outright rather than
+# changing how it links, so the directory-scoped -static-libstdc++ it sits
+# alongside becomes inert and the two do not have to be ordered. Rendering it
+# inert is the intent, so the driver's resulting "argument unused" note is
+# silenced here rather than left for every consumer to explain.
+#
+# Only a target that links fabric may use this — anything else would have
+# nothing to resolve libc++ from. That is why it is applied from the two
+# helpers that establish that link rather than from project_setup.
+#
+# No other platform needs it: macOS resolves libc++ from the shared
+# libc++.1.dylib in the SDK, Android links c++_shared, and Windows consumers
+# import fabric's runtime surface through its import library. Linux was the only
+# platform that ended up with two C++ runtimes in one process. Full rationale
+# and the alternatives considered: arch/qips/linux-fabric-libcxx-ownership.md.
+# ---------------------------------------------------------------------------
+function(qvac_addon_import_fabric_cxx_runtime target)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(${target} PRIVATE
+      -nostdlib++ -Wno-unused-command-line-argument)
+  endif()
+endfunction()
+
+# ---------------------------------------------------------------------------
 # qvac_addon_link_fabric(<addon_target> <fabric_target>)
 #
 # The two-target link split: compile the addon library against the ggml headers,
-# and give the .bare module a DT_NEEDED on the shared runtime.
+# and give the .bare module a DT_NEEDED on the shared runtime — which on Linux
+# is also where its C++ runtime comes from.
 # ---------------------------------------------------------------------------
 function(qvac_addon_link_fabric addon_target fabric_target)
   target_link_libraries(${addon_target} PRIVATE qvac-fabric::headers)
   target_link_libraries(${addon_target}_module PRIVATE ${fabric_target}_module)
+  qvac_addon_import_fabric_cxx_runtime(${addon_target}_module)
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -300,9 +341,14 @@ endfunction()
 #   * copy qvac__fabric@0.bare next to the test binary,
 #   * stage @qvac/fabric's dlopen'd ggml backends (Linux/Android) alongside it,
 #   * $ORIGIN / @loader_path rpath so the copies resolve,
-#   * the Windows delay-load helper the imported module target doesn't carry.
+#   * the Windows delay-load helper the imported module target doesn't carry,
+#   * fabric's C++ runtime on Linux, so the test binary exercises the same
+#     single-runtime link as the production module (a test that kept its own
+#     libc++ could not catch an exception fabric threw).
 # ---------------------------------------------------------------------------
 function(qvac_addon_stage_fabric_for_test test_target fabric_target)
+  qvac_addon_import_fabric_cxx_runtime(${test_target})
+
   if((ANDROID OR UNIX) AND NOT APPLE)
     target_compile_definitions(${test_target} PRIVATE GGML_BACKEND_DL)
   endif()
@@ -413,9 +459,9 @@ endmacro()
 #                                  then run `<target> --fuzz=Suite.Test`.
 #
 # The target is linked with AddressSanitizer; without LINK_FABRIC it keeps FULL
-# ASan + LeakSanitizer (the fabric prebuild's static-libstdc++ boundary is the
-# only thing that forces relaxed ASan options — see qvac_addon_stage_fabric_for_test),
-# so prefer fuzzing pure parse/transform code with LINK_FABRIC omitted.
+# ASan + LeakSanitizer (loading the non-ASan fabric prebuild is the only thing
+# that forces relaxed ASan options — see qvac_addon_stage_fabric_for_test), so
+# prefer fuzzing pure parse/transform code with LINK_FABRIC omitted.
 # ---------------------------------------------------------------------------
 function(qvac_addon_add_fuzz_target target)
   cmake_parse_arguments(_QAFZ "LINK_FABRIC" "" "SOURCES;INCLUDE_DIRS;LINK_LIBS" ${ARGN})
@@ -482,10 +528,11 @@ function(qvac_addon_add_fuzz_target target)
   # Pin the sanitizer posture on the test itself instead of inheriting whatever
   # the invoking shell carries: ASan replaces its defaults with ASAN_OPTIONS
   # wholesale, so a value left over from an addon-test session would silently
-  # turn LeakSanitizer off here. A fabric-linked target has to run relaxed (the
-  # static-libstdc++ boundary trips alloc/dealloc-mismatch and fabric's
-  # long-lived globals look like leaks); everything else runs at full strength.
-  # Mirrors scripts/run-cpp-fuzz.js and scripts/run-cpp-tests.js.
+  # turn LeakSanitizer off here. A fabric-linked target has to run relaxed:
+  # fabric's long-lived runtime globals and its dlopen'd ggml backends look like
+  # leaks at exit, and alloc/dealloc-mismatch stays off as a backstop for
+  # allocations that cross the module boundary. Everything else runs at full
+  # strength. Mirrors scripts/run-cpp-fuzz.js and scripts/run-cpp-tests.js.
   if(NOT WIN32)
     if(_QAFZ_LINK_FABRIC)
       set(_qafz_asan_options "alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1")

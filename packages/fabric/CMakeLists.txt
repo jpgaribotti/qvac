@@ -21,13 +21,12 @@ project(qvac-fabric VERSION ${_pkg_version} LANGUAGES C CXX)
 
 # Test-only AddressSanitizer build, enabled with QVAC_FABRIC_ASAN=1 (set by
 # link-local-qvac-fabric with asan:true, which also exports VCPKG_* sanitizer
-# flags for the qvac-fabric vcpkg port). Here we instrument the module itself
-# of -static-libstdc++. A module-local static libc++ would provide its own
-# operator new/delete and the symbols.map `local: *` rule would bind them
-# internally, so allocations made inside fabric would bottom out at malloc and
-# clash with the test executable's ASan operator delete. With the shared libc++
-# those operators resolve to the ASan runtime the test exe provides, so
-# cross-module allocations match and ASan sees the whole runtime.
+# flags for the qvac-fabric vcpkg port). Here we instrument the module itself and
+# link the *shared* libc++ rather than embedding it, so that fabric's operator
+# new/delete are left to the test executable's ASan runtime to provide and
+# allocations that cross the module boundary match. The release build reaches the
+# same place by a different route -- it embeds libc++ but exports its operators,
+# so they are interposable (see the Linux block below).
 set(QVAC_FABRIC_ASAN OFF)
 if(DEFINED ENV{QVAC_FABRIC_ASAN} AND NOT "$ENV{QVAC_FABRIC_ASAN}" STREQUAL "0")
   set(QVAC_FABRIC_ASAN ON)
@@ -39,7 +38,37 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
     add_link_options(-stdlib=libc++ -fsanitize=address)
   else()
-    add_link_options(-stdlib=libc++ -static-libstdc++)
+    # libc++ is still linked statically, so the prebuild stays self-contained
+    # (no DT_NEEDED on libc++.so.1), but it is whole-archived rather than pulled
+    # in by -static-libstdc++, and exported via symbols.map, so that this module
+    # is the one C++ runtime for every consumer addon that DT_NEEDEDs it. See
+    # arch/qips/linux-fabric-libcxx-ownership.md.
+    #
+    # Whole-archive is what makes that possible: -static-libstdc++ pulls in only
+    # the archive members llama/ggml/common themselves reference, and a version
+    # script filters symbols that are present rather than pulling members in
+    # (the same reason ggml is whole-archived below). An addon linked with
+    # -nostdlib++ would then fail to resolve every part of libc++ that fabric
+    # happens not to use -- measured on a probe: 111 undefined references for a
+    # single translation unit using ostringstream, regex and a local static.
+    execute_process(
+      COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=libc++.a
+      OUTPUT_VARIABLE QVAC_FABRIC_LIBCXX_ARCHIVE
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    # -print-file-name echoes the input unchanged when it cannot find the file,
+    # so an unusable answer must fail here rather than silently fall back to a
+    # runtime with an incomplete C++ ABI.
+    if(NOT IS_ABSOLUTE "${QVAC_FABRIC_LIBCXX_ARCHIVE}"
+       OR NOT EXISTS "${QVAC_FABRIC_LIBCXX_ARCHIVE}")
+      message(FATAL_ERROR
+        "qvac-fabric: could not locate libc++.a via "
+        "'${CMAKE_CXX_COMPILER} -print-file-name' (got "
+        "'${QVAC_FABRIC_LIBCXX_ARCHIVE}'). The Linux runtime must embed and "
+        "export libc++; install the libc++ static library for this toolchain.")
+    endif()
+    message(STATUS "qvac-fabric: embedding ${QVAC_FABRIC_LIBCXX_ARCHIVE}")
+    add_link_options(-stdlib=libc++ -nostdlib++)
   endif()
 endif()
 
@@ -161,6 +190,13 @@ if(UNIX)
   endforeach()
 elseif(WIN32)
   target_link_libraries(${qvac-fabric} PRIVATE ggml::ggml-vector-index)
+endif()
+
+# Embed the whole C++ standard library so symbols.map has the complete runtime
+# to export (see the -nostdlib++ block above for why a plain link is not enough).
+if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+  target_link_libraries(${qvac-fabric}
+    PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${QVAC_FABRIC_LIBCXX_ARCHIVE}>")
 endif()
 
 # Override install_name so that consumers using @loader_path rpath can resolve
