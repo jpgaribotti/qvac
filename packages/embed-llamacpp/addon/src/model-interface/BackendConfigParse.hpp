@@ -43,7 +43,9 @@ inline std::optional<MainGpu> parseMainGpu(const std::string& mainGpuStr) {
   } catch (const std::exception&) {
     // Not an integer, try enum values
     std::string lowerStr = mainGpuStr;
-    std::ranges::transform(lowerStr, lowerStr.begin(), tolower);
+    std::ranges::transform(lowerStr, lowerStr.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
 
     if (lowerStr == "integrated") {
       return MainGpu(MainGpuType::Integrated);
