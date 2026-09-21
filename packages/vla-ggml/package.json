@@ -1,6 +1,6 @@
 {
   "name": "@qvac/vla-ggml",
-  "version": "0.27.4",
+  "version": "0.27.3",
   "description": "VLA vision-language-action inference addon for QVAC (ggml backend)",
   "addon": true,
   "engines": {
