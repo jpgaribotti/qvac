@@ -8,6 +8,10 @@ endif()
 # Shared addon build helpers. See docs/architecture/ADDON-CMAKE-TEMPLATE.md.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
 qvac_addon_preproject()
+# Package-local triplets first so SentencePiece (and the rest of the vcpkg
+# tree) compile as C++20 against Abseil 20260526.0 from the FuzzTest pin.
+set(VCPKG_OVERLAY_TRIPLETS
+    "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 option(USE_BERGAMOT "Enable Bergamot backend support" ON)
 # Off by default: Adreno 830 ggml-opencl M%4 assertion (QVAC-17790)
 option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
