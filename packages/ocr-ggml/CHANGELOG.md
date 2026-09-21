@@ -12,11 +12,6 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `dedicated` / `integrated` class when a GPU backend is requested. Unavailable
   classes and refused devices fall back to CPU; out-of-range indices warn and
   use automatic selection. Cannot be combined with `gpuDevice`.
-
-## [0.24.4] - 2026-09-18
-
-### Added
-
 - Bounded FuzzTest coverage for `decodeOrWrapImage`, the encoded-image / raw
   bitmap front door. Linux C++ CI runs the suite. The target links OpenCV but
   not `@qvac/fabric`, so ASan and LeakSanitizer stay at full strength. No
@@ -26,7 +21,8 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Reject encoded images whose byte length would truncate when cast to `int`,
   and raw bitmaps whose width × height × bpp overflows `size_t`, instead of
-  wrapping into an undersized `cv::Mat`.
+  wrapping into an undersized `cv::Mat`. Empty encoded buffers are rejected
+  before OpenCV `imdecode`.
 
 ## [0.24.3] - 2026-09-18
 
