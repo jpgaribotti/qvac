@@ -1,4 +1,4 @@
-#include "nmt_loader.hpp"
+#include "nmt_loader_parse.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "ggml.h"
+
+// NOLINTBEGIN(readability-identifier-naming,modernize-use-using,readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
 
 #if defined(NMT_BIG_ENDIAN)
 template <typename T> static T byteswap(T value) {

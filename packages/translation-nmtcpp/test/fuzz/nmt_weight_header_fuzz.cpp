@@ -7,7 +7,7 @@
 #include <fuzztest/fuzztest.h>
 #include <gtest/gtest.h>
 
-#include "model-interface/nmt_loader.hpp"
+#include "model-interface/nmt_loader_parse.hpp"
 
 // Property tests over the GGML weight-header parsers extracted in #4590.
 // The original crash was `n_dims > 4` writing past `int32_t ne[4]` while

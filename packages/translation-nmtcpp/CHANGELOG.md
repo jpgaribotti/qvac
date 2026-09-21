@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bounded FuzzTest coverage for the GGML weight-header parsers (`nmtReadTensorDims`,
   `nmtReadBoundedString`, `nmtReadCount`, `nmtIsValidTensorType`). Linux C++ CI runs
-  the suite after unit tests. The parsers compile without `@qvac/fabric`, so ASan
-  and LeakSanitizer stay at full strength. No public addon API changes.
+  the suite after unit tests, in an isolated `build-fuzz/` tree so FuzzTest's
+  `abseil[asan] 20260526.0` never shares a vcpkg prefix with production
+  `abseil@onnxruntime#1`. The parsers compile without `@qvac/fabric` or
+  sentencepiece, so ASan and LeakSanitizer stay at full strength. No public addon
+  API changes.
 
 ## [0.16.4] - 2026-09-18
 

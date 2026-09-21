@@ -13,6 +13,7 @@ const assert = require('node:assert/strict')
 const {
   DEFAULT_FUZZ_TEST,
   DEFAULT_ASAN_OPTIONS,
+  DEFAULT_BUILD_DIR,
   parseArgs,
   buildFuzzArgs,
   buildRunnerEnv,
@@ -27,6 +28,10 @@ test('parseArgs defaults to bounded mode and the default fuzz test', () => {
     buildDir: undefined,
     fuzzerArgs: []
   })
+})
+
+test('unspecified build dir falls back to the isolated fuzz tree, not build/', () => {
+  assert.equal(DEFAULT_BUILD_DIR, 'build-fuzz')
 })
 
 test('parseArgs enables continuous mode and accepts a fuzz test selector', () => {

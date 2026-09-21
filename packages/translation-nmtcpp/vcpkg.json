@@ -16,17 +16,6 @@
     "ssplit"
   ],
   "features": {
-    "fuzz": {
-      "description": "Build fuzz targets (Google FuzzTest dependencies)",
-      "dependencies": [
-        "antlr4",
-        {
-          "name": "fuzztest",
-          "version>=": "2026-06-29"
-        },
-        "gtest"
-      ]
-    },
     "tests": {
       "description": "Build tests",
       "dependencies": [
@@ -35,11 +24,6 @@
     }
   },
   "overrides": [
-    {
-      "name": "abseil",
-      "version": "onnxruntime",
-      "port-version": 1
-    },
     {
       "name": "flatbuffers",
       "version": "23.5.26"

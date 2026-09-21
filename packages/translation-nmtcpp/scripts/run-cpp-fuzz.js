@@ -27,6 +27,7 @@ const { spawnSync } = require('child_process')
 //   npm run fuzz:continuous -- --fuzz_for=30m
 const DEFAULT_FUZZ_TEST = 'NmtWeightHeaderFuzz.TensorDimsNeverCrashes'
 const BINARY_NAME = 'nmt-weight-header-fuzz'
+const DEFAULT_BUILD_DIR = 'build-fuzz'
 
 // Strict counterpart to run-cpp-tests.js's relaxed fabric-boundary string.
 // detect_leaks=1 is already ASan's Linux default; it is spelled out so the
@@ -127,13 +128,13 @@ function resolveExitCode(result) {
 function main() {
   const { continuous, fuzzTest, buildDir, fuzzerArgs } = parseArgs(process.argv.slice(2))
   const binary = os.platform() === 'win32' ? `${BINARY_NAME}.exe` : `./${BINARY_NAME}`
-  // Every configure of this package shares the default build/ tree; the fuzz
-  // scripts just pass a different -D set. --build-dir stays available for a
-  // side-by-side tree.
+  // This package cannot share build/ with unit tests: production NMT pins
+  // abseil@onnxruntime#1 and FuzzTest needs abseil[asan] 20260526.0. Default
+  // to the isolated build-fuzz/ tree that npm run fuzz:build configures.
   const cwd = path.resolve(
     __dirname,
     '..',
-    buildDir || process.env.CPP_BUILD_DIR || 'build',
+    buildDir || process.env.CPP_BUILD_DIR || DEFAULT_BUILD_DIR,
     'test',
     'fuzz'
   )
@@ -174,5 +175,6 @@ module.exports = {
   asanOptionsNotice,
   resolveExitCode,
   DEFAULT_FUZZ_TEST,
-  DEFAULT_ASAN_OPTIONS
+  DEFAULT_ASAN_OPTIONS,
+  DEFAULT_BUILD_DIR
 }
