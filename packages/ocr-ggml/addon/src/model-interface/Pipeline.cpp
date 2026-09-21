@@ -1,5 +1,4 @@
 #include "Pipeline.hpp"
-#include "DecodeImage.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -9,6 +8,8 @@
 #include <utility>
 
 #include <opencv2/imgproc.hpp>
+
+#include "DecodeImage.hpp"
 
 namespace qvac_lib_infer_ocr_ggml {
 

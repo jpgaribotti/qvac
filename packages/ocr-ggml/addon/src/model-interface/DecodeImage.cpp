@@ -11,11 +11,15 @@ namespace qvac_lib_infer_ocr_ggml {
 
 cv::Mat decodeOrWrapImage(const OcrInput& input) {
   if (input.isEncoded) {
+    if (input.data.empty()) {
+      throw std::runtime_error("ocr-ggml: encoded image is empty");
+    }
     // cv::Mat constructor wants non-const void* but cv::imdecode does not
     // write through it. Reject lengths that would truncate when cast to int,
     // the same class of attacker-controlled size field as the NMT n_dims
     // overflow.
-    if (input.data.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    if (input.data.size() >
+        static_cast<size_t>(std::numeric_limits<int>::max())) {
       throw std::runtime_error("ocr-ggml: encoded image is too large");
     }
     cv::Mat encoded(

@@ -25,7 +25,8 @@ std::vector<uint8_t> validPngSeed() {
   const cv::Mat rgb(16, 16, CV_8UC3, cv::Scalar(0, 128, 255));
   std::vector<uint8_t> encoded;
   if (!cv::imencode(".png", rgb, encoded) || encoded.empty()) {
-    throw std::runtime_error("ocr-decode-image-fuzz: failed to encode PNG seed");
+    throw std::runtime_error(
+        "ocr-decode-image-fuzz: failed to encode PNG seed");
   }
   return encoded;
 }
@@ -50,8 +51,9 @@ OcrInput rawInput(int width, int height, int bpp, std::vector<uint8_t> bytes) {
 void EncodedNeverCrashes(const std::vector<uint8_t>& bytes) {
   try {
     (void)decodeOrWrapImage(encodedInput(bytes));
-  } catch (const std::runtime_error&) {
-    // Rejected as invalid — not a defect.
+  } catch (const std::exception&) {
+    // Rejected as invalid — including OpenCV's cv::Exception. Not a defect
+    // for this NeverCrashes property; ASan abort is the finding.
   }
 }
 
@@ -66,18 +68,19 @@ FUZZ_TEST(OcrDecodeImageFuzz, EncodedNeverCrashes)
     });
 
 void RawNeverCrashes(
-    int width, int height, int bitsPerPixel, const std::vector<uint8_t>& bytes) {
+    int width, int height, int bitsPerPixel,
+    const std::vector<uint8_t>& bytes) {
   try {
     (void)decodeOrWrapImage(rawInput(width, height, bitsPerPixel, bytes));
-  } catch (const std::runtime_error&) {
-    // Rejected as invalid — not a defect.
+  } catch (const std::exception&) {
+    // Rejected as invalid — including OpenCV's cv::Exception. Not a defect
+    // for this NeverCrashes property; ASan abort is the finding.
   }
 }
 
 FUZZ_TEST(OcrDecodeImageFuzz, RawNeverCrashes)
     .WithDomains(
-        fuzztest::InRange<int>(-1, 64),
-        fuzztest::InRange<int>(-1, 64),
+        fuzztest::InRange<int>(-1, 64), fuzztest::InRange<int>(-1, 64),
         fuzztest::ElementOf({0, 8, 16, 24, 32, 48}),
         fuzztest::Arbitrary<std::vector<uint8_t>>().WithMaxSize(256))
     .WithSeeds([] {
@@ -103,6 +106,10 @@ TEST(OcrDecodeImageFuzzSeeds, RawSizeMismatchIsRejected) {
   EXPECT_THROW(
       decodeOrWrapImage(rawInput(8, 8, 24, std::vector<uint8_t>(3, 0))),
       std::runtime_error);
+}
+
+TEST(OcrDecodeImageFuzzSeeds, EmptyEncodedIsRejected) {
+  EXPECT_THROW(decodeOrWrapImage(encodedInput({})), std::runtime_error);
 }
 
 } // namespace
