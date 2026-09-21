@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.12.3] - 2026-09-18
+## [Unreleased]
 
 ### Added
 
@@ -8,12 +8,6 @@
   CI runs the suite after unit tests. The parsers compile without
   `@qvac/fabric`, so ASan and LeakSanitizer stay at full strength. No public
   addon API changes.
-
-
-## [Unreleased]
-
-### Added
-
 - A fit stub is documented and covered as an accepted `modelPath`, single-file
   and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
   tokenizer tables and no data section, which the registry serves in place of
