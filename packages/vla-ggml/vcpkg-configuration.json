@@ -12,6 +12,7 @@
       "packages": [
         "antlr4",
         "gtest",
+        "libuuid",
         "spirv-headers"
       ]
     }
