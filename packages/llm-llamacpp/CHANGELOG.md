@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.53.3] - 2026-09-18
+## [Unreleased]
 
 ### Added
 
@@ -8,7 +8,6 @@
   `matchesAnyStopString`. Linux C++ CI runs the suite after unit tests. The
   targets compile without `@qvac/fabric`, so ASan and LeakSanitizer stay at
   full strength. No public addon API changes.
-
 
 ## [0.53.2] - 2026-09-17
 
