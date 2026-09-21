@@ -13,6 +13,7 @@
         "antlr4",
         "concurrentqueue",
         "gtest",
+        "libuuid",
         "nlohmann-json",
         "picojson",
         "spirv-headers"
