@@ -1204,6 +1204,51 @@ test("publish-cpp-test-status stamps its run URL into target_url", () => {
   );
 });
 
+test("merge guard changes filter: ALL_PACKAGES and producer-less workflow paths", async () => {
+  const { CARVED_OUT_PRODUCERS, CPP_TEST_KEYS, PREBUILD_KEYS } = await import(
+    join(root, ".github/scripts/prebuild-status/lib.mjs")
+  );
+  const changes = jobBlock(read(".github/workflows/pr-gate-merge.yml"), "changes");
+  const filters = {};
+  let current = null;
+  for (const line of changes.split("\n")) {
+    const key = line.match(/^ {12}([a-z0-9-]+):$/);
+    if (key) {
+      current = key[1];
+      filters[current] = [];
+      continue;
+    }
+    const entry = line.match(/^ {14}- "(.+)"$/);
+    if (entry && current) filters[current].push(entry[1]);
+  }
+  delete filters["pkg-any"];
+  delete filters["shared-ci"];
+  const dirOf = (pkg) => (pkg === "vla" ? "packages/vla-ggml" : `packages/${pkg}`);
+  const exists = (pkg) => readdirSync(join(root, "packages")).includes(dirOf(pkg).slice("packages/".length));
+
+  // The shared-CI sanity sweep runs every ALL_PACKAGES entry, so it must be
+  // exactly the filter keys that have a package to check.
+  const allPackagesBlock = changes.match(/ALL_PACKAGES: >-\n((?: {12}\S.*\n)+)/);
+  assert.ok(allPackagesBlock, "ALL_PACKAGES is defined in the changes job");
+  const allPackages = JSON.parse(allPackagesBlock[1].replace(/\n/g, " "));
+  assert.deepEqual(
+    [...allPackages].sort(),
+    Object.keys(filters).filter(exists).sort(),
+    "ALL_PACKAGES must list every changes filter key whose package directory exists",
+  );
+
+  // on-pr-nx only triggers on packages/**. A workflow path on an nx-produced
+  // key flags the package on a PR that never runs on-pr-nx, so the verify job
+  // waits to its deadline for a status nothing posts.
+  const nxProduced = [...new Set([...CPP_TEST_KEYS, ...PREBUILD_KEYS])].filter(
+    (pkg) => !(pkg in CARVED_OUT_PRODUCERS) && exists(pkg),
+  );
+  const offenders = nxProduced.filter((pkg) =>
+    (filters[pkg] ?? []).some((path) => path.startsWith(".github/workflows/")),
+  );
+  assert.deepEqual(offenders, [], "nx-produced packages must not list a workflow path in the changes filter");
+});
+
 test("on-pr-nx treats a cppTestsBaseline package's skipped suite as a failure", () => {
   const job = jobBlock(read(".github/workflows/on-pr-nx.yml"), "publish-cpp-test-status");
   assert.match(
