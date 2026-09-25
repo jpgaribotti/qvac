@@ -15,6 +15,9 @@ constexpr int32_t NMT_MAX_VOCAB_TOKEN_LENGTH = 1024;
 constexpr int32_t NMT_MAX_VOCAB_SIZE = 1000000;
 constexpr int64_t NMT_MAX_SENTENCEPIECE_MODEL_BYTES = 64LL * 1024 * 1024;
 
+// C-style loader vtable shared with nmt.hpp (`nmt_context`,
+// `nmt_context_params`). Keep snake_case; do not modernize in isolation.
+// NOLINTBEGIN(readability-identifier-naming)
 typedef struct nmt_model_loader {
   void* context;
 
@@ -36,5 +39,6 @@ bool nmtReadTensorName(
 
 bool nmtReadCount(
     struct nmt_model_loader* loader, int32_t maxCount, int32_t& count);
+// NOLINTEND(readability-identifier-naming)
 
 bool nmtIsValidTensorType(int32_t ttype);

@@ -7,14 +7,15 @@
 #include <fuzztest/fuzztest.h>
 #include <gtest/gtest.h>
 
+#include "ggml.h"
 #include "model-interface/nmt_loader_parse.hpp"
 
 // Property tests over the GGML weight-header parsers extracted in #4590.
 // The original crash was `n_dims > 4` writing past `int32_t ne[4]` while
 // loading an untrusted model; nearby length fields had the same shape
 // (allocate-then-read with no cap). These targets compile the parsers
-// without @qvac/fabric so ASan + LeakSanitizer stay at full strength.
-// See docs/architecture/ADDON-FUZZING.md.
+// against qvac-fabric::headers only (ggml.h, no fabric module) so ASan +
+// LeakSanitizer stay at full strength. See docs/architecture/ADDON-FUZZING.md.
 
 namespace {
 
@@ -78,8 +79,15 @@ FUZZ_TEST(NmtWeightHeaderFuzz, TensorDimsNeverCrashes)
       return std::vector<std::tuple<int32_t, std::vector<int32_t>>>{
           {2, {512, 32322}},
           {4, {2, 3, 4, 5}},
-          {8, {0x41414141, 0x41414141, 0x41414141, 0x41414141, 0x41414141,
-               0x41414141, 0x41414141, 0x41414141}},
+          {8,
+           {0x41414141,
+            0x41414141,
+            0x41414141,
+            0x41414141,
+            0x41414141,
+            0x41414141,
+            0x41414141,
+            0x41414141}},
           {0, {1}},
           {-1, {1}},
           {2, {65536, 65536}},
@@ -94,8 +102,7 @@ void BoundedStringNeverCrashes(
   BufferReader reader{payload.data(), payload.size(), 0};
   auto loader = makeLoader(reader);
   std::string out;
-  (void)nmtReadBoundedString(
-      &loader, length, NMT_MAX_TENSOR_NAME_LENGTH, out);
+  (void)nmtReadBoundedString(&loader, length, NMT_MAX_TENSOR_NAME_LENGTH, out);
 }
 FUZZ_TEST(NmtWeightHeaderFuzz, BoundedStringNeverCrashes)
     .WithDomains(
