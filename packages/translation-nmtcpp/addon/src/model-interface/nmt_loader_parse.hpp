@@ -6,7 +6,8 @@
 
 // Parse-only surface for the GGML weight-header readers. Isolated from nmt.hpp
 // so a FuzzTest TU can compile these without sentencepiece / Bergamot / the
-// onnxruntime-pinned Abseil those pull in. See docs/architecture/ADDON-FUZZING.md.
+// onnxruntime-pinned Abseil those pull in. See
+// docs/architecture/ADDON-FUZZING.md.
 
 constexpr int NMT_MAX_TENSOR_DIMS = 4;
 constexpr int32_t NMT_MAX_TENSOR_NAME_LENGTH = 256;

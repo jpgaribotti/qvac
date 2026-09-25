@@ -21,6 +21,10 @@
         },
         "gtest",
         {
+          "name": "qvac-lint-cpp",
+          "version>=": "1.4.4#3"
+        },
+        {
           "name": "re2",
           "version>=": "2025-11-05",
           "features": [

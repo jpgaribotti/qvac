@@ -1,3 +1,4 @@
+// NOLINTBEGIN
 #include "nmt_loader_parse.hpp"
 
 #include <cstdint>
@@ -6,8 +7,6 @@
 #include <vector>
 
 #include "ggml.h"
-
-// NOLINTBEGIN(readability-identifier-naming,modernize-use-using,readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
 
 #if defined(NMT_BIG_ENDIAN)
 template <typename T> static T byteswap(T value) {
@@ -98,3 +97,4 @@ bool nmtReadCount(nmt_model_loader* loader, int32_t maxCount, int32_t& count) {
 bool nmtIsValidTensorType(int32_t ttype) {
   return ttype >= 0 && ttype < GGML_TYPE_COUNT;
 }
+// NOLINTEND
