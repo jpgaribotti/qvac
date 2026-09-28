@@ -1227,10 +1227,14 @@ test("merge guard changes filter: ALL_PACKAGES and producer-less workflow paths"
   const exists = (pkg) => readdirSync(join(root, "packages")).includes(dirOf(pkg).slice("packages/".length));
 
   // The shared-CI sanity sweep runs every ALL_PACKAGES entry, so it must be
-  // exactly the filter keys that have a package to check.
-  const allPackagesBlock = changes.match(/ALL_PACKAGES: >-\n((?: {12}\S.*\n)+)/);
-  assert.ok(allPackagesBlock, "ALL_PACKAGES is defined in the changes job");
-  const allPackages = JSON.parse(allPackagesBlock[1].replace(/\n/g, " "));
+  // exactly the filter keys that have a package to check. One line: a folded
+  // scalar with a deeper indent keeps its newlines, which $GITHUB_OUTPUT rejects.
+  const allPackagesMatch = changes.match(/ALL_PACKAGES:\s*'(\[[^\n]*\])'/);
+  assert.ok(
+    allPackagesMatch,
+    "ALL_PACKAGES is a single-line JSON array in the changes job",
+  );
+  const allPackages = JSON.parse(allPackagesMatch[1]);
   assert.deepEqual(
     [...allPackages].sort(),
     Object.keys(filters).filter(exists).sort(),
