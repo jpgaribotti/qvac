@@ -39,7 +39,9 @@ public:
   // runs — the same class of bug as the NMT `n_dims` / tensor-name lengths.
   static constexpr uint64_t kMaxHeaderLength = 16ull * 1024 * 1024;
 
-  // Parses the header and reads the entire data blob into memory. Throws
+  // Parses the header and reads the data blob into memory. The 8-byte
+  // length is checked before any payload allocation, so a huge or zero
+  // length on a large file is rejected without reading the rest. Throws
   // std::runtime_error on any parse failure. Sized for the ~137 MB
   // reference activations; not appropriate for multi-GB files.
   void open(const std::string& path) {
@@ -53,12 +55,30 @@ public:
       throw std::runtime_error("safetensors: file too short");
     }
     in.seekg(0);
-    std::vector<uint8_t> bytes(static_cast<size_t>(total));
-    in.read(reinterpret_cast<char*>(bytes.data()), total);
-    if (!in) {
-      throw std::runtime_error("safetensors: short blob read");
+
+    uint64_t headerLen = 0;
+    in.read(reinterpret_cast<char*>(&headerLen), 8);
+    if (!in || headerLen == 0 || headerLen > kMaxHeaderLength ||
+        headerLen > static_cast<uint64_t>(total) - 8) {
+      throw std::runtime_error("safetensors: bad header length");
     }
-    openFromMemory(bytes.data(), bytes.size());
+
+    std::string header(static_cast<size_t>(headerLen), '\0');
+    in.read(header.data(), static_cast<std::streamsize>(headerLen));
+    if (!in) {
+      throw std::runtime_error("safetensors: short header read");
+    }
+    parseHeader(header);
+
+    const std::streamoff blobSize =
+        total - 8 - static_cast<std::streamoff>(headerLen);
+    blob_.resize(static_cast<size_t>(blobSize));
+    if (blobSize > 0) {
+      in.read(reinterpret_cast<char*>(blob_.data()), blobSize);
+      if (!in) {
+        throw std::runtime_error("safetensors: short blob read");
+      }
+    }
   }
 
   // In-memory counterpart of open() for fuzzing and tests. `size` is the

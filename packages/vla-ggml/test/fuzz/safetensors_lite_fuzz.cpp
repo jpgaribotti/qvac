@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -68,6 +70,37 @@ TEST(SafetensorsLiteFuzzSeeds, ValidSeedParsesAndReadsF32) {
   EXPECT_NO_THROW(values = reader.readF32("w"));
   ASSERT_EQ(values.size(), 1U);
   EXPECT_EQ(values[0], 0.0F);
+}
+
+TEST(SafetensorsLiteFuzzSeeds, FileOpenRejectsZeroHeaderWithoutReadingPayload) {
+  const auto path =
+      std::filesystem::temp_directory_path() / "qvac-safetensors-bad-header.bin";
+  {
+    std::ofstream out(path, std::ios::binary);
+    const uint64_t headerLen = 0;
+    std::vector<char> payload(64 * 1024, 'x');
+    out.write(reinterpret_cast<const char*>(&headerLen), 8);
+    out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+  }
+  Reader reader;
+  EXPECT_THROW(reader.open(path.string()), std::runtime_error);
+  std::filesystem::remove(path);
+}
+
+TEST(SafetensorsLiteFuzzSeeds, FileOpenReadsValidTensor) {
+  const std::vector<uint8_t> bytes = validOneTensorSeed();
+  const auto path =
+      std::filesystem::temp_directory_path() / "qvac-safetensors-valid.bin";
+  {
+    std::ofstream out(path, std::ios::binary);
+    out.write(
+        reinterpret_cast<const char*>(bytes.data()),
+        static_cast<std::streamsize>(bytes.size()));
+  }
+  Reader reader;
+  ASSERT_NO_THROW(reader.open(path.string()));
+  EXPECT_TRUE(reader.has("w"));
+  std::filesystem::remove(path);
 }
 
 TEST(SafetensorsLiteFuzzSeeds, HugeHeaderLengthIsRejected) {
