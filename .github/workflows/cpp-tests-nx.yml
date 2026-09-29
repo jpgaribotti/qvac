@@ -668,6 +668,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
+      pull-requests: write
     uses: ./.github/workflows/cpp-tests-ocr.yml
     secrets: inherit
     with:
