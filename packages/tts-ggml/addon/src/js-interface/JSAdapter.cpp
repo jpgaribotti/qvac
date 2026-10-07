@@ -9,8 +9,8 @@
 
 #include "inference-addon-cpp/Errors.hpp"
 #include "js-interface/NumberConversion.hpp"
-#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 #include "js-interface/TtsConfigParse.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
 
