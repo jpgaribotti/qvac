@@ -31,8 +31,6 @@ jobs:
     needs: runner_names
     permissions:
       contents: read
-      id-token: write
-      checks: write
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
@@ -66,7 +64,7 @@ jobs:
           node-version: lts/*
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare bare-make@1.8.0
 
       - name: Install NPM dependencies
         working-directory: ${{ env.PKG_DIR }}
