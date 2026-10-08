@@ -8,8 +8,9 @@ across the addon fleet.
 Status: **Phase 0 implemented for `classification-ggml`**, and the shared
 fuzz helpers (`qvac_addon_fuzz_manifest`, `qvac_addon_fuzz_only_return`,
 `qvac_addon_add_fuzz_target`) are reused by unmigrated addons without a full
-CMake-template adoption. Bounded Linux CI coverage exists for classification
-and for the remaining native addons' parse/transform fronts. Fleet
+CMake-template adoption. Bounded Linux CI coverage exists for
+`classification-ggml` and for the `tts-ggml` and `audiogen-ggml` config-parse
+fronts. Fleet
 corpus/dictionary scale-up, scheduled continuous fuzzing, and optional
 OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
@@ -508,8 +509,8 @@ post-merge commit, so `fuzztest` resolves from the registry with no overlay.
 Sequencing still prefers the CMake-template + fabric migration, but unmigrated
 addons can now reuse the extracted fuzz helpers without calling
 `qvac_addon_preproject()` (that macro also sets overlay triplets and Android
-STL). Whisper / parakeet / tts / audiogen / diffusion keep their own
-CMakeLists and opt in with `qvac_addon_fuzz_manifest()` before `project()` plus
+STL). Unmigrated addons (whisper / parakeet / tts / audiogen / diffusion) keep
+their own CMakeLists and opt in with `qvac_addon_fuzz_manifest()` before `project()` plus
 `qvac_addon_fuzz_only_return()` after the inference-addon-cpp include path is
 resolved. Within that order the plan still front-loads the shared parsing
 families that protect several addons at once.
@@ -578,18 +579,19 @@ families that protect several addons at once.
   direct-ggml addon adopts the template, add its fuzz targets: the image family
   (`classification-ggml`, `ocr-ggml`, `vla-ggml`) and GGUF/weight-header
   parsers. Unmigrated addons reuse the same helpers without a template
-  migration: `asr-ggml` (s16le PCM), `tts-ggml` / `audiogen-ggml` (config
-  number parse), `bci-whispercpp` (neural-signal length prefix),
-  `diffusion-cpp` (GGUF capability inspect). Prefer the no-fabric link;
+  migration, starting with the `tts-ggml` and `audiogen-ggml` config number
+  parsers. Prefer the no-fabric link;
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.
-- **Phase 2 — text + audio + config families.** Remaining llama.cpp / NMT text
-  parsers and deeper audio-buffer math still land with (or after) template
-  migration where the code sits behind engine state.
-- **Phase 3 — harness gaps.** `fabric` is still out of scope. `audiogen-ggml`
-  now has a parse-front fuzz target; a GTest/`addon-test` harness remains
-  future work.
+- **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
+  NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
+  JSON parsers. Code behind engine state lands with (or after) that addon's
+  template migration; pure parse fronts can use the unmigrated-addon helpers.
+- **Phase 3 — harness gaps.** Stand up the missing GTest/`addon-test` harness
+  for `audiogen-ggml` (and decide whether `fabric` is in scope) so its
+  engine-side code can be fuzzed. Its config-parse front is already fuzzed
+  without the harness.
 - **Phase 4 — seed corpora + dictionaries.** Every target ships the minimum
   in-harness `.WithSeeds(...)` needed to make its branches reachable per PR (see
   the Phase 0 follow-up); this phase is the scale-up. Seed from existing assets
@@ -707,9 +709,10 @@ families that protect several addons at once.
   for the shared fuzz helper. Unmigrated addons include `qvac-addon.cmake` and
   call `qvac_addon_fuzz_manifest()` before `project()` without
   `qvac_addon_preproject()`, so overlay triplets and Android STL stay local.
-- **Harness gaps.** `fabric` is still out of scope. `audiogen-ggml` now fuzzes
-  its config-parse front; a full GTest/`addon-test` harness remains future
-  work.
+- **Harness gaps.** `audiogen-ggml` and `fabric` need harness work before their
+  engine-side code can be fuzzed (`audiogen-ggml`'s config-parse front already
+  is); they are sequenced last so they don't block the high-value shared-family
+  coverage.
 
 ## References
 

@@ -6,12 +6,9 @@
 // Device Farm legs on main, not one. Post-merge phone runs are not part of how
 // mobile is tested here — the on-demand dispatch lane is — so a Device Farm run
 // firing on every merge is spend with no reader, which the device-minute
-// programme exists to remove. decoder-audio via
-// mobile-gate-decoder-audio, and asr-ggml, bci-whispercpp and tts-ggml because
-// post-build-gate opens on a GPR publish too, not only npm, and publish-gpr
-// accepted publish_main. Those three set postIntegrationOnGpr in their
-// project.json, so the gate handed them post-publish-integration and a
-// mobile-post-publish-* Device Farm run on every main push.
+// programme exists to remove. decoder-audio, asr-ggml, bci-whispercpp and
+// tts-ggml set postIntegrationOnGpr in project.json, so post-build-gate
+// hands them desktop and mobile integration tests after a GPR publish too.
 //
 // Restoring them would mean a Device Farm run per main push across four
 // addons. The PR-time lane keeps the coverage.
@@ -63,11 +60,10 @@ const LIBRARY_PUBLISHERS = new Set([
 ])
 
 // Guards against discovery returning an empty set and passing vacuously.
-// QVAC-19792 folded the 13 per-package on-merge-<pkg> pipelines into
-// on-merge-nx; model-fit kept its own. Add a pipeline here when one appears.
+// Native addons, including model-fit, publish through on-merge-nx.
+// Add a pipeline here when one appears.
 const KNOWN = [
   'on-merge-ggml-rpc-server.yml',
-  'on-merge-model-fit.yml',
   'on-merge-nx.yml',
 ]
 
@@ -179,6 +175,14 @@ test('every exemption names a file that exists', () => {
         'reusing it',
     )
   }
+})
+
+test('model-fit publishing is covered by the consolidated workflow', () => {
+  const source = read('on-merge-nx.yml')
+  assert.match(pushBody(source).join('\n'), /^ {6}- "packages\/model-fit\/\*\*"$/m)
+  assert.match(source, /^ {10}- model-fit$/m)
+  assert.match(source, /^ {12}model-fit: packages\/model-fit\/\*\*$/m)
+  assert.equal(existsSync(join(WORKFLOW_DIR, 'on-merge-model-fit.yml')), false)
 })
 
 test('no unenumerated workflow is exempt by name pattern', () => {

@@ -8,7 +8,7 @@ through a native addon. It does not bundle or launch llama.cpp's
 
 Prebuild artifacts are produced for macOS arm64/x64, Linux arm64/x64, Windows
 x64, Android arm64, iOS arm64, and the iOS simulator on arm64/x64. Desktop
-prebuild jobs smoke-test both the in-process lifecycle path; Android/iOS jobs
+prebuild jobs smoke-test the in-process lifecycle path; Android/iOS jobs
 cross-build the same addon for their targets.
 
 ```js
@@ -18,7 +18,6 @@ const server = await startRpcServer({ device: 'Vulkan0' })
 
 try {
   console.log(server.url)
-  console.log(server.runtime) // 'in-process'
   console.log(server.rdmaCapable)
 } finally {
   await server.stop()
@@ -35,12 +34,36 @@ and do not treat loopback binding as an access-control boundary. Non-loopback
 hosts are rejected unless `allowNonLoopbackHost: true` is passed; use them only
 on a trusted/private network with external access controls.
 
+With `cache: true`, the server stores tensor data sent by clients in a local
+cache directory, so any client that can connect can write to that directory.
+Combined with a non-loopback host, that is unauthenticated disk writes from the
+network; enable the cache only for clients you trust.
+
 Like a listening `net.Server`, a running server keeps the process alive until
 `stop()` resolves, so a standalone worker can start it and wait for clients.
 
-Native server output is written to the host application's platform log;
-`logs()` returns an empty string because there is no child-process stdout
-stream to capture.
+Native server output is written to the host application's platform log.
+
+## Errors
+
+Errors are classes that can be matched by `name` or `instanceof`. Invalid
+options throw `RpcServerInvalidHostError`, `RpcServerNonLoopbackHostError`,
+`RangeError` (port) or `TypeError` (threads); a failed port lookup throws
+`RpcServerPortAllocationError`; and `expectRdma: true` on a backend without RDMA
+throws `RpcServerRdmaUnavailableError`. Failures reported by the native server
+extend `RpcServerNativeError`, which carries the native error as `cause` and a
+`code` equal to its `name`:
+
+| Error | When |
+|---|---|
+| `RpcServerDeviceError` | No requested device exists, or no device is available |
+| `RpcServerCacheError` | The cache directory cannot be resolved or created |
+| `RpcServerStartError` | The server cannot be created or bound, or the RPC backend is missing |
+| `RpcServerBackendError` | The Fabric backends directory is invalid or cannot be inspected |
+| `RpcServerStopError` | The server does not stop cleanly |
+
+Anything else from the native addon, such as an out-of-memory failure, is
+rethrown unchanged.
 
 ## Linux requirements
 
@@ -74,3 +97,16 @@ console.log(server.rdmaCapable)
 
 Without `expectRdma`, the server starts either way and reports the backend's
 capability in `rdmaCapable`.
+
+## Testing
+
+```bash
+npm run test:unit          # JS unit tests against a mocked binding
+npm run test:cpp           # C++ unit tests (GoogleTest)
+npm run test:integration   # desktop integration tests against prebuilds/
+```
+
+On a PR, `on-pr-nx.yml` runs the C++ tests with the `run-cpp-addon-tests` label
+and the desktop integration tests with the `run-desktop-addon-tests` label. Their
+platforms and runner setup live in the `test:cpp` and `test:integration`
+targets of `project.json`.

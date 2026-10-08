@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.28.0] - 2026-10-07
+
+### Added
+
+- MiniMax-H3 FL2VA ConvRot text-to-video and image-to-video examples with
+  synchronized audio, model download script, and FLUX.2-generated I2V keyframes.
+
+### Changed
+
+- Route H3 image-to-video first-frame conditioning through the native video job
+  and require the video VAE encoder for that mode.
+
+### Pull Requests
+
+- [#4789](https://github.com/tetherto/qvac/pull/4789) - QVAC-24827 feat:
+  MiniMax H3 text-to-video and image-to-video.
+
+## [0.27.0] - 2026-10-02
+
+### Added
+
+- Configurable `max_image_pixels` and `max_job_pixels` limits for image and
+  video models. Standalone ESRGAN accepts `max_image_pixels`; ABot-World
+  accepts `maxImagePixels`.
+
+### Changed
+
+- Decoded inputs default to 64 Mi pixels per image and 128 Mi pixels retained
+  by a multi-reference image or video job. Larger inputs and longer video
+  guidance sequences can raise the configured limits explicitly; independent
+  format, dimension, compressed-size, PNG inflate, and JPEG scan safeguards
+  remain in force.
+
+### Fixed
+
+- Validate PNG/JPEG input sizes, source-data budgets, inflated PNG data, and
+  progressive JPEG scans before full decoding, with specific errors for
+  invalid or over-limit inputs across image, video, ESRGAN, and ABot-World.
+- Check projected ESRGAN output against the per-image limit before generation
+  and each upscale pass.
+- Preserve compatibility with PNGs carrying bounded trailing inflated data
+  and JPEGs carrying padding before the frame header.
+
+### Pull Requests
+
+- [#4738](https://github.com/tetherto/qvac/pull/4738) - QVAC-25637 fix: bound
+  diffusion image decoding before allocation.
+
 ## [0.26.0] - 2026-09-28
 
 ### Added

@@ -1,9 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 option(ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
+qvac_addon_fuzz_manifest()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -40,6 +46,12 @@ configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
                ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
+
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
+
 find_package(tts-cpp CONFIG REQUIRED COMPONENTS pocket)
 # Older configs may not implement component checks. Reject those explicitly.
 if(NOT tts-cpp_pocket_FOUND)
@@ -202,6 +214,8 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/audio8/Audio8Model.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/chatterbox/ChatterboxModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/moss/MossModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/moss/MossSoundEffectModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/moss/MossSpeechModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parler/ParlerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/supertonic/SupertonicModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp
@@ -377,6 +391,8 @@ if(BUILD_TESTING)
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_moss_config.cpp
+      addon/tests/test_moss_sound_effect_config.cpp
+      addon/tests/test_moss_speech_config.cpp
       addon/tests/test_parler_config.cpp
       addon/tests/test_supertonic_config.cpp
       addon/tests/test_cosyvoice_config.cpp
@@ -392,6 +408,8 @@ if(BUILD_TESTING)
       addon/src/model-interface/audio8/Audio8Model.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
       addon/src/model-interface/moss/MossModel.cpp
+      addon/src/model-interface/moss/MossSoundEffectModel.cpp
+      addon/src/model-interface/moss/MossSpeechModel.cpp
       addon/src/model-interface/parler/ParlerModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp
       addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp
@@ -432,3 +450,5 @@ if(BUILD_TESTING)
   # during configure-time discovery to keep configure cheap.
   add_test(NAME tts_ggml_tests COMMAND tts_ggml_tests)
 endif()
+
+qvac_addon_add_fuzz_subdirectory()
