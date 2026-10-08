@@ -125,8 +125,8 @@ TEST(AudiogenConfigParseFuzzSeeds, ValidFloatStillParses) {
 }
 
 TEST(AudiogenConfigParseFuzzSeeds, NonFiniteFloatIsRejected) {
-  EXPECT_THROW(checkedFloat(std::numeric_limits<double>::infinity(), "x"),
-               StatusError);
+  EXPECT_THROW(
+      checkedFloat(std::numeric_limits<double>::infinity(), "x"), StatusError);
 }
 
 } // namespace
