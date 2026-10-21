@@ -528,6 +528,39 @@ TEST_F(ToolGrammarModelTest, PromptParserReadsPastToolCalls) {
   EXPECT_EQ(result.tool_name, "get_weather");
 }
 
+// A tool's schema and a past call's object arguments keep the caller's key
+// order at every level. fabric builds the tool grammar with object properties
+// in schema order, so a schema re-sorted to `email, name` made the grammar
+// reject `{"name": ..., "email": ...}`.
+TEST_F(ToolGrammarModelTest, PromptParserKeepsCallerKeyOrder) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const std::string parameters =
+      R"({"type":"object","properties":{"user_id":{"type":"integer"},)"
+      R"("update_info":{"type":"object","properties":{)"
+      R"("name":{"type":"string"},"email":{"type":"string"}}},)"
+      R"("database":{"type":"string","default":"CustomerInfo"}},)"
+      R"("required":["user_id","update_info"]})";
+  const std::string arguments =
+      R"({"user_id":12345,"update_info":{"name":"John","email":"j@x.io"}})";
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"type":"function","name":"update_user_info","parameters":)" +
+          parameters + "}," +
+          R"({"role":"user","content":"Update user 12345."},)"
+          R"({"role":"assistant","content":"","tool_calls":[)"
+          R"({"name":"update_user_info","arguments":)" +
+          arguments + "}]}]");
+
+  ASSERT_EQ(parsed.tools.size(), 1u);
+  EXPECT_EQ(parsed.tools[0].parameters, parameters);
+  ASSERT_EQ(parsed.chatMsgs.size(), 2u);
+  ASSERT_EQ(parsed.chatMsgs[1].tool_calls.size(), 1u);
+  EXPECT_EQ(parsed.chatMsgs[1].tool_calls[0].arguments, arguments);
+}
+
 // OpenAI-shaped history leaves `content` null or absent on an assistant turn
 // that only carries `tool_calls`; both read as empty content.
 TEST_F(ToolGrammarModelTest, PromptParserAcceptsEmptyContentOnToolCallTurns) {
