@@ -16,6 +16,9 @@ on:
     paths:
       - "packages/fabric/**"
       - ".github/workflows/*fabric*.yml"
+      # Moving the toolchain lock rebuilds fabric with the new compiler, and
+      # fabric's libc++ is the one every addon links against.
+      - ".github/bare-toolchain/package-lock.json"
   workflow_dispatch:
   workflow_call:
 

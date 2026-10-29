@@ -15,7 +15,7 @@
  */
 import { spawnSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -38,7 +38,9 @@ if (process.env.GITHUB_PATH) {
   console.log(`Add ${bin} to the front of PATH to use the locked toolchain.`)
 }
 
-const env = { ...process.env, PATH: `${bin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH}` }
+// Windows spells it Path, and a second PATH key beside it is not the one used.
+const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
+const env = { ...process.env, [pathKey]: `${bin}${delimiter}${process.env[pathKey] ?? ''}` }
 for (const tool of ['bare-make', 'clang', 'llvm-profdata']) {
   run(tool, ['--version'], { env })
 }

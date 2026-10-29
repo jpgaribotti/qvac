@@ -13,6 +13,7 @@ on:
       - '.github/actions/vcpkg-*/**'
       - '.github/scripts/configure-cpp-build.mjs'
       - 'vcpkg-overlays/**'
+      - '.github/bare-toolchain/package-lock.json'
   schedule:
     # Every 2 days for the same reason as on-merge-vcpkg-cache-embed.yml: the
     # cache server prunes an entry after CACHE_CLEANUP_OLDER_THAN_DAYS=5 days
