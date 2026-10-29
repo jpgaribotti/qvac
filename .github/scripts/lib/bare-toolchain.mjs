@@ -87,7 +87,7 @@ export function issueBody(drift) {
     'To move the lock:',
     '',
     '1. Merge the Dependabot pull request for `/.github/bare-toolchain`, or run `npm install --package-lock-only` there after editing the `bare-make` pin.',
-    '2. On that pull request, check the fabric prebuilds and cpp-lint from **On PR Trigger (Fabric)**, and dispatch **CPP Tests (nx)** on its branch with `packages: ["llm-llamacpp"]` for the coverage report.',
+    '2. Add the `prebuilds` and `run-cpp-addon-tests` labels to that pull request. **On PR Trigger (Fabric)** then builds every fabric prebuild and runs cpp-lint, and **On PR Trigger (nx)** runs the llm-llamacpp C++ tests and coverage report.',
     '3. A new llvm-runtime major also moves the libc++ that fabric embeds and exports to every addon, so release fabric before the addons pick it up.',
     '',
     'This issue is updated when a newer release appears and closed once the lock catches up.',

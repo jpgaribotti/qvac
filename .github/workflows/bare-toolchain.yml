@@ -4,8 +4,8 @@ name: Bare toolchain
 #
 # On a pull request that moves the lock, every OS installs it and checks that
 # bare-make, clang and llvm-profdata on PATH are the locked versions. The builds
-# themselves run from On PR Trigger (Fabric), which lists the lockfile in its
-# paths.
+# run from On PR Trigger (Fabric), which lists the lockfile in its paths, and
+# On PR Trigger (nx), where the lockfile is an on-pr input of llm-llamacpp.
 #
 # Daily, it compares the lock with npm. A newer release opens or updates one
 # issue labelled toolchain-drift, and the issue closes once the lock catches up.
