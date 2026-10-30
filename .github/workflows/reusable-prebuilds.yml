@@ -464,9 +464,9 @@ jobs:
         shell: bash
         run: npm install
 
-      # Its bin directory goes first on PATH, ahead of the global bare-make the
-      # pinned setup-bare-tooling installs, so generate and the vcpkg
-      # toolchain's find_program(bare-make) both use the locked toolchain.
+      # The pinned setup-bare-tooling installs the lock from its own commit.
+      # This puts the checkout's lock first on PATH, so a lock bump is what
+      # generate and the vcpkg toolchain's find_program(bare-make) both use.
       - name: Install the locked bare toolchain
         shell: bash
         run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"

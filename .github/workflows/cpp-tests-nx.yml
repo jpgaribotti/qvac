@@ -326,8 +326,9 @@ jobs:
         if: matrix.mode == 'coverage'
         run: npm install -g --force bare
 
+      # The pinned setup-bare-tooling installs the lock from its own commit.
+      # This one is the checkout's, so a lock bump is what the tests build with.
       - name: Install the locked bare toolchain
-        if: matrix.mode == 'coverage'
         run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Setup Apple Clang
