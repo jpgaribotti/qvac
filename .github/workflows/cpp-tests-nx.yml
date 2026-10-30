@@ -289,7 +289,6 @@ jobs:
           path: ${{ matrix.workdir }}/vcpkg/cache
 
       - name: Setup Node.js
-        if: matrix.mode == 'coverage'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -316,18 +315,12 @@ jobs:
         if: matrix.hasCcache
         run: ccache -z
 
-      - name: Setup Bare tooling (composite)
-        if: matrix.mode == 'standard'
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@9c7bdfde26137357159de1cf31d8b9b14d39c3a7
-        with:
-          shell_type: ${{ (matrix.platform == 'win32' || matrix.platform == 'windows') && 'powershell' || 'bash' }}
-
       - name: Install bare tooling (global)
-        if: matrix.mode == 'coverage'
-        run: npm install -g --force bare
+        run: npm install -g --force ${{ matrix.mode == 'coverage' && 'bare' || 'bare-runtime' }}
 
-      # The pinned setup-bare-tooling installs the lock from its own commit.
-      # This one is the checkout's, so a lock bump is what the tests build with.
+      # The checkout's lock rather than setup-bare-tooling's: a pinned action
+      # installs the lock from its own commit, so a lock bump would not be what
+      # the tests build with.
       - name: Install the locked bare toolchain
         run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 

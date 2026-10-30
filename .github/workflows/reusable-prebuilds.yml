@@ -398,10 +398,16 @@ jobs:
             default { Write-Host "Unknown arch '$env:INPUT_ARCH'; CMAKE_GENERATOR_PLATFORM left unset" }
           }
 
-      - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@9c7bdfde26137357159de1cf31d8b9b14d39c3a7
+      # What setup-bare-tooling does, except the toolchain comes from the
+      # checkout's lock further down: a pinned action installs the lock from its
+      # own commit, so a lock bump would not be what the prebuilds build with.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+          node-version: lts/*
+
+      - name: Install the Bare runtime
+        run: npm install -g --force bare-runtime
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
@@ -464,9 +470,9 @@ jobs:
         shell: bash
         run: npm install
 
-      # The pinned setup-bare-tooling installs the lock from its own commit.
-      # This puts the checkout's lock first on PATH, so a lock bump is what
-      # generate and the vcpkg toolchain's find_program(bare-make) both use.
+      # After the SDK setup steps, so nothing they add to PATH shadows the locked
+      # toolchain that generate and the vcpkg toolchain's find_program(bare-make)
+      # use.
       - name: Install the locked bare toolchain
         shell: bash
         run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
