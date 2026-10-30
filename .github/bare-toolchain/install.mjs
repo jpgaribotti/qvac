@@ -25,6 +25,8 @@ const shell = process.platform === 'win32'
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: 'inherit', shell, ...options })
+  // A missing binary sets error and leaves status null. Report that instead of "exited with null".
+  if (result.error) throw result.error
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} exited with ${result.status ?? result.signal}`)
   }
