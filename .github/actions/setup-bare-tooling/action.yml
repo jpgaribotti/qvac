@@ -22,10 +22,6 @@ runs:
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: ${{ inputs.node-version }}
-        # Holds the llvm and cmake tarballs. A token that cannot use the cache
-        # warns and continues; the lockfile is the one in this checkout.
-        cache: npm
-        cache-dependency-path: .github/bare-toolchain/package-lock.json
 
     - name: Install global dependencies
       shell: ${{ inputs.shell_type }}

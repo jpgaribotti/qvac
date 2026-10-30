@@ -323,11 +323,7 @@ jobs:
 
       - name: Install bare tooling (global)
         if: matrix.mode == 'coverage'
-        run: npm install -g --force bare
-
-      - name: Install the locked bare toolchain
-        if: matrix.mode == 'coverage'
-        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
+        run: npm install -g --force bare bare-make@1.8.0
 
       - name: Setup Apple Clang
         if: matrix.mode == 'standard' && matrix.platform == 'darwin'
