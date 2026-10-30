@@ -3,12 +3,13 @@ name: Bare toolchain
 # Watches the bare toolchain CI builds with, which .github/bare-toolchain pins.
 #
 # On a pull request that moves the lock, every OS installs it and checks that
-# bare-make, clang and llvm-profdata on PATH are the locked versions. The builds
+# bare-make, clang and llvm-profdata on PATH come from it. The builds
 # run from On PR Trigger (Fabric), which lists the lockfile in its paths, and
 # On PR Trigger (nx), where the lockfile is an on-pr input of llm-llamacpp.
 #
 # Daily, it compares the lock with npm. A newer release opens or updates one
 # issue labelled toolchain-drift, and the issue closes once the lock catches up.
+# Closing it by hand puts that release off until a newer one appears.
 # Nothing here fails on drift: CI keeps building with the locked versions until
 # a pull request moves them.
 
@@ -51,7 +52,7 @@ jobs:
       - name: Install the locked bare toolchain
         run: node .github/bare-toolchain/install.mjs
 
-      - name: Check the tools on PATH are the locked versions
+      - name: Check the tools on PATH come from the lock
         run: node .github/scripts/check-bare-toolchain.mjs verify-path
 
   drift:
@@ -93,6 +94,11 @@ jobs:
       contents: read
       issues: write
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/lib
+
       - name: Download the issue body
         if: needs.drift.outputs.drift == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -109,52 +115,17 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            const title = 'bare toolchain update available';
-            const label = 'toolchain-drift';
-            const marker = /<!-- bare-toolchain-drift: ([^ ]*) -->/;
+            const { pathToFileURL } = require('node:url');
+            const { syncDriftIssue } = await import(
+              pathToFileURL(`${process.env.GITHUB_WORKSPACE}/.github/scripts/lib/bare-toolchain.mjs`).href
+            );
             const { owner, repo } = context.repo;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: 'open', labels: label, per_page: 100,
+            const drift = process.env.DRIFT === 'true';
+            await syncDriftIssue({
+              github, owner, repo,
+              runUrl: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              drift,
+              key: process.env.DRIFT_KEY,
+              body: drift ? fs.readFileSync(process.env.BODY_FILE, 'utf8') : '',
+              log: (message) => core.info(message),
             });
-            const existing = issues.find((issue) => issue.pull_request === undefined && issue.title === title);
-
-            if (process.env.DRIFT !== 'true') {
-              if (existing) {
-                await github.rest.issues.createComment({
-                  owner, repo, issue_number: existing.number,
-                  body: `The lock matches the latest releases on npm again. Closing. (${runUrl})`,
-                });
-                await github.rest.issues.update({ owner, repo, issue_number: existing.number, state: 'closed' });
-                core.info(`Closed #${existing.number}`);
-              }
-              return;
-            }
-
-            const body = fs.readFileSync(process.env.BODY_FILE, 'utf8');
-            if (!existing) {
-              try {
-                await github.rest.issues.getLabel({ owner, repo, name: label });
-              } catch (error) {
-                if (error.status !== 404) throw error;
-                await github.rest.issues.createLabel({
-                  owner, repo, name: label, color: 'fbca04',
-                  description: 'npm has a newer bare toolchain than .github/bare-toolchain pins',
-                });
-              }
-              const created = await github.rest.issues.create({ owner, repo, title, body, labels: [label] });
-              core.info(`Opened #${created.data.number}`);
-              return;
-            }
-
-            if (existing.body?.match(marker)?.[1] === process.env.DRIFT_KEY) {
-              core.info(`#${existing.number} already reports ${process.env.DRIFT_KEY}`);
-              return;
-            }
-            await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
-            await github.rest.issues.createComment({
-              owner, repo, issue_number: existing.number,
-              body: `Newer releases: ${process.env.DRIFT_KEY.split(',').join(', ')}. The table above is current. (${runUrl})`,
-            });
-            core.info(`Updated #${existing.number}`);

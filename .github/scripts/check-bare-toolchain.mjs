@@ -7,21 +7,24 @@
  *                to review, not a failure. With --report <file>, writes the
  *                tracking issue body there.
  *   verify-path  Fail when bare-make, clang or llvm-profdata on PATH is not
- *                the locked version, i.e. install.mjs did not take effect.
+ *                the one in the lock's node_modules/.bin, i.e. install.mjs did
+ *                not take effect.
  *
  * Usage:
  *   node .github/scripts/check-bare-toolchain.mjs drift [--report <file>]
  *   node .github/scripts/check-bare-toolchain.mjs verify-path
  */
 import { spawnSync } from 'node:child_process'
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import {
+  PATH_TOOLS,
   WATCHED,
   driftKey,
   findDrift,
+  findOnPath,
   issueBody,
   lockedVersions,
   pathMismatches,
@@ -85,18 +88,30 @@ function drift(argv) {
 }
 
 function verifyPath() {
-  const locked = readLocked()
-  const reported = {}
-  for (const tool of ['bare-make', 'clang', 'llvm-profdata']) {
+  const bin = join(dirname(LOCKFILE), 'node_modules', '.bin')
+  const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
+  const found = {}
+  let failed = false
+  for (const tool of PATH_TOOLS) {
+    found[tool] = findOnPath(tool, {
+      path: process.env[pathKey] ?? '',
+      pathext: process.env.PATHEXT ?? '',
+      platform: process.platform,
+      exists: existsSync,
+    })
     const result = spawnSync(tool, ['--version'], { encoding: 'utf8', shell })
-    reported[tool] = result.status === 0 ? reportedVersion(result.stdout) : null
-    console.log(`${tool}: ${reported[tool] ?? 'not found'}`)
+    const version = result.status === 0 ? reportedVersion(result.stdout) : null
+    console.log(`${tool}: ${found[tool] ?? 'not found'} (${version ?? 'does not run'})`)
+    if (found[tool] && result.status !== 0) {
+      console.log(`::error::${tool} at ${found[tool]} does not run`)
+      failed = true
+    }
   }
-  const mismatches = pathMismatches(locked, reported)
-  for (const { tool, expected, actual } of mismatches) {
-    console.log(`::error::${tool} on PATH is ${actual ?? 'missing'}, the lockfile pins ${expected}`)
+  for (const { tool, actual } of pathMismatches(bin, found, process.platform)) {
+    console.log(`::error::${tool} on PATH is ${actual ?? 'missing'}, not the locked one in ${bin}`)
+    failed = true
   }
-  if (mismatches.length > 0) process.exitCode = 1
+  if (failed) process.exitCode = 1
 }
 
 function main() {
